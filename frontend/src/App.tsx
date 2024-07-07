@@ -13,7 +13,7 @@ import { ChakraProvider } from '@chakra-ui/react';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 
 import theme from './theme';
-import './App.css';  // Make sure to import the CSS file
+import './App.css'; 
 
 //const API_URL = '/api';
 const API_URL = 'http://localhost:8000';

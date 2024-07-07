@@ -4,3 +4,8 @@ pygments
 tavily-python
 python-dotenv
 Pillow
+pytest
+fastapi
+uvicorn
+pytest
+httpx

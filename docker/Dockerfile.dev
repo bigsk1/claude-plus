@@ -1,0 +1,44 @@
+# docker/Dockerfile.dev
+
+# Base image
+FROM node:18 as frontend
+
+# Set working directory
+WORKDIR /app/frontend
+
+# Copy package.json and package-lock.json
+COPY frontend/package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Backend
+FROM python:3.12
+
+# Set working directory
+WORKDIR /app
+
+# Copy backend requirements
+COPY requirements.txt .
+
+# Install backend dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install uvicorn for development
+RUN pip install uvicorn
+
+# Copy backend source
+COPY backend.py shared_utils.py ./
+
+# Copy the projects folder
+COPY projects ./projects
+
+# Expose ports
+EXPOSE 8000 5173
+
+# Copy the start script
+COPY docker/start-dev.sh /start-dev.sh
+RUN chmod +x /start-dev.sh
+
+# Set the entrypoint
+ENTRYPOINT ["/start-dev.sh"]

@@ -1,0 +1,6 @@
+anthropic
+colorama
+pygments
+tavily-python
+python-dotenv
+Pillow

@@ -1,0 +1,19 @@
+services:
+  claudeplus-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    ports:
+      - "8000:8000"
+      - "5173:5173"
+    volumes:
+      - ../:/app
+      - /app/frontend/node_modules
+      - ../projects:/app/projects
+    env_file:
+      - ../.env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - NODE_ENV=development
+    stdin_open: true
+    tty: true

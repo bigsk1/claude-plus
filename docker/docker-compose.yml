@@ -1,0 +1,13 @@
+services:
+  claudeplus:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../projects:/app/projects
+    env_file:
+      - ../.env
+    environment:
+      - PYTHONUNBUFFERED=1

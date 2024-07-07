@@ -1,0 +1,121 @@
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+.react-markdown ul {
+  padding-left: 1em;
+  list-style-type: disc;
+  text-align: left;
+}
+
+.react-markdown ol {
+  padding-left: 1em;
+  list-style-type: decimal;
+  text-align: left;
+}
+
+.react-markdown p {
+  margin: 0;
+  text-align: left;
+}
+
+/* In App.css */
+.chat-box {
+  display: flex;
+  flex-direction: column;
+  height: 60vh;
+  overflow-y: auto;
+}
+
+.message-box {
+  text-align: left; /* Align text to the left */
+  word-wrap: break-word; /* Ensure long words break to fit within the box */
+  padding: 0.5em 1em; /* Increase padding as needed */
+  margin: 0.5em 0; /* Add some margin between messages */
+}
+
+.search-result {
+  margin-bottom: 20px;
+  padding: 10px;
+  border-radius: 5px;
+  transition: all 0.3s ease;
+}
+
+.light-mode .search-result {
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+}
+
+.dark-mode .search-result {
+  background-color: #2d3748;
+  border: 1px solid #4a5568;
+}
+
+.search-result h3 {
+  margin-top: 0;
+}
+
+.light-mode .search-result h3 a {
+  color: #2b6cb0;
+}
+
+.dark-mode .search-result h3 a {
+  color: #63b3ed;
+}
+
+.search-result a {
+  text-decoration: none;
+}
+
+.search-result a:hover {
+  text-decoration: underline;
+}
+
+.light-mode .search-result p {
+  color: #2d3748;
+}
+
+.dark-mode .search-result p {
+  color: #e2e8f0;
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}

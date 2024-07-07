@@ -1,0 +1,45 @@
+# .dockerignore
+
+# Ignore .git and .cache folders
+.git
+.cache
+
+# Ignore all markdown files (md) except README.md
+*.md
+!README.md
+
+# Don't ignore .env for development , change for production!
+# .env*
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.mypy_cache
+.pytest_cache
+.hypothesis
+
+# Node
+# Don't ignore node_modules for development
+# node_modules
+npm-debug.log
+yarn-error.log
+
+# Project specific
+venv
+*.egg-info
+dist
+build

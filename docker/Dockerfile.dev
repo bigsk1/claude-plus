@@ -5,19 +5,23 @@ FROM node:18 as frontend
 WORKDIR /app/frontend
 
 # Copy package.json and package-lock.json
-COPY ../frontend/package*.json ./
+COPY frontend/package*.json ./
 
 # Install dependencies
 RUN npm install
 
-# Backend
+# Backend and final image
 FROM python:3.12
+
+# Install Node.js
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs
 
 # Set working directory
 WORKDIR /app
 
 # Copy backend requirements
-COPY ../requirements.txt .
+COPY requirements.txt .
 
 # Install backend dependencies
 RUN pip install --no-cache-dir -r requirements.txt
@@ -26,16 +30,22 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install uvicorn
 
 # Copy backend source
-COPY ../backend.py ../shared_utils.py ./
+COPY backend.py shared_utils.py ./
 
 # Copy the projects folder
-COPY ../projects ./projects
+COPY projects ./projects
+
+# Copy frontend files
+COPY frontend /app/frontend
+
+# Install frontend dependencies
+RUN cd /app/frontend && npm install
 
 # Expose ports
 EXPOSE 8000 5173
 
 # Copy the start script
-COPY start-dev.sh /start-dev.sh
+COPY docker/start-dev.sh /start-dev.sh
 RUN chmod +x /start-dev.sh
 
 # Set the entrypoint

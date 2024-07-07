@@ -17,3 +17,4 @@ services:
       - NODE_ENV=development
     stdin_open: true
     tty: true
+    command: /bin/sh -c "cd /app/frontend && npm install --verbose && /start-dev.sh"

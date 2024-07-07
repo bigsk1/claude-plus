@@ -51,4 +51,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build the Docker image
-      run: docker build . --file docker/Dockerfile --tag claudeplus:$(date +%s)
+      run: |
+        cd docker
+        docker build -t claudeplus:$(date +%s) .

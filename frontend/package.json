@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && vite build",
+    "build": "tsc --noEmit && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "test": "jest --watchAll=false",
     "preview": "vite preview"
@@ -32,10 +32,8 @@
     "@babel/preset-env": "^7.24.7",
     "@babel/preset-react": "^7.24.7",
     "@babel/preset-typescript": "^7.24.7",
-    "@eslint/compat": "^1.1.0",
-    "@eslint/js": "^9.6.0",
     "@testing-library/jest-dom": "^6.4.6",
-    "@testing-library/react": "^16.0.0",
+    "@testing-library/react": "^14.2.1",
     "@types/jest": "^29.5.12",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
@@ -43,13 +41,12 @@
     "@typescript-eslint/parser": "^7.13.1",
     "@vitejs/plugin-react": "^4.3.1",
     "babel-jest": "^29.7.0",
-    "eslint": "^9.6.0",
+    "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.34.3",
     "eslint-plugin-react-hooks": "^4.6.2",
     "eslint-plugin-react-refresh": "^0.4.7",
-    "globals": "^15.8.0",
-    "jest": "^27.5.1",
-    "ts-jest": "^27.1.5",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
     "typescript": "^5.2.2",
     "vite": "^5.3.1"
   }

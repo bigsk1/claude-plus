@@ -143,7 +143,7 @@ Remember, Claude Plus is continuously learning and improving. Don't hesitate to 
 
 ## Docker
 
-This project includes Docker configurations for both development and production environments.
+This project includes a Docker configuration
 
 ### Development Docker Setup
 
@@ -152,27 +152,15 @@ This project includes Docker configurations for both development and production 
 3. Build and run the development containers:
 
    ```
-   docker-compose -f docker/docker-compose.dev.yml up --build
+   docker-compose -f docker/docker-compose.dev.yml up -d --build
    ```
 
 4. Access the application:
-   - Backend: http://localhost:8000
+
    - Frontend: http://localhost:5173
 
 The development setup includes hot-reloading for both frontend and backend, and maps the `projects` folder to persist data.
 
-### Production Docker Setup
-
-1. Navigate to the project root directory.
-2. Build and run the production containers:
-
-   ```
-   docker-compose -f docker/docker-compose.yml up --build
-   ```
-
-3. Access the application at http://localhost:8000
-
-The production setup builds the frontend and serves it through the backend for optimal performance.
 
 ## VS Code Dev Container Setup
 

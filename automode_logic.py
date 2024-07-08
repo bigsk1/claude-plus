@@ -266,12 +266,12 @@ async def start_automode_logic(request: AutomodeRequest) -> AsyncGenerator[str, 
             {"role": "user", "content": request.message}
         ]
 
-        max_iterations = 3
+        max_iterations = 5
 
         for i in range(max_iterations):
             response = anthropic_client.messages.create(
                 model=CLAUDE_MODEL,
-                max_tokens=1000,
+                max_tokens=2000,
                 system=system_message,
                 messages=conversation_history,
                 tools=tools

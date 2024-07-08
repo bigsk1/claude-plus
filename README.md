@@ -8,16 +8,19 @@ Claude Plus is an advanced AI-powered development assistant that combines the ca
 
 ## Features
 
-- 🩸 Interact with the enigmatic Claude-3.5-Sonnet
-- 🕳️ Manipulate the shadowy file system (create ominous folders, files, read/write cryptic files)
-- 👁️‍🗨️ Unearth secrets via Tavily API or SearXNG
-- ⚡ Illuminate dark code snippets
-- 🕸️ Weave complex project structures
-- 🧩 Analyze and suggest improvements with an unsettling precision
-- 👁️‍🗨️ Unveil hidden visions with spectral image support
-- 🕹️ Automode for eerie, autonomous task completion
-- 🔄 Trace iterative changes in automode with chilling accuracy
-- 🩸 Diff-based file editing for cold and precise modifications
+- 🧠 **Interact with Claude-3.5-Sonnet**: Engage with the advanced AI for insightful and precise assistance.
+- 📁 **File System Manipulation**: Create, read, and write files and folders seamlessly.
+- 🔍 **Powerful Search**: Utilize Tavily API or SearXNG to perform comprehensive searches.
+- 💡 **Code Snippet Management**: Highlight and manage code snippets efficiently.
+- 📂 **Project Structure Management**: Build and maintain complex project structures with ease.
+- 🔧 **Code Analysis and Suggestions**: Receive detailed analysis and improvement suggestions for your code.
+- 🖼️ **Image Analysis**: Analyze images and gain insights with AI-powered image support.
+- ⚙️ **Automode**: Automate tasks for increased efficiency and productivity.
+- 🔄 **Iterative Tracking**: Monitor changes and iterations accurately during automode sessions.
+- ✂️ **Diff-Based Editing**: Edit files using diff-based techniques for precise modifications.
+
+This application leverages the power of Claude to enhance your development workflow, providing robust tools for file management, search, code analysis, and automation.
+
 
 
 ## Getting Started
@@ -60,11 +63,13 @@ Claude Plus is an advanced AI-powered development assistant that combines the ca
 
    CLAUDE_MODEL=claude-3-5-sonnet-20240620
 
-   TAVILY_API_KEY=your_tavily_api_key
+   SEARCH_PROVIDER=SEARXNG   # or TAVILY
+
+   TAVILY_API_KEY=your_tavily_api_key  # If using Tavily 
 
    SEARXNG_URL=your_searxng_url  # If using SearXNG
 
-   SEARXNG_URL=http://localhost:4000
+   MAX_ITERATIONS=5  # Number of automode iterations
    ```
 
 ### Running the Application
@@ -72,7 +77,7 @@ Claude Plus is an advanced AI-powered development assistant that combines the ca
 1. Start the backend server:
 
    ```
-   uvicorn backend:app --reload --host 0.0.0.0 --port 8000
+   uvicorn backend:app --host 0.0.0.0 --port 8000
    ```
 
 2. In a new terminal, start the frontend development server from the frontend folder:
@@ -99,7 +104,7 @@ Claude Plus offers a powerful suite of features to enhance your development work
 
 - **File Upload**: Easily upload files for Claude to analyze or work with. All uploaded files are stored in the `projects/uploads` folder.
 - **Image Analysis**: Upload images for Claude to describe and analyze, useful for UI/UX discussions or diagram interpretations.
-- **Code Review**: Upload your code files for Claude to review, suggest improvements, or explain complex sections.
+- **Code Review**: Upload your code files for Claude to review, suggest improvements, or explain complex sections. It will not only read your files you add but can modify and even delete if requested.
 
 ### 3. Project Structure Management
 
@@ -133,7 +138,6 @@ Claude Plus offers a powerful suite of features to enhance your development work
 ### 7. Version Control Integration (Coming Soon)
 
 - **Git Commands**: Perform basic git operations like commit, push, and pull directly from the chat.
-- **Diff Viewer**: Visualize code changes with an integrated diff tool.
 - **Commit Message Assistance**: Let Claude suggest meaningful commit messages based on your changes.
  
 - **Chat History**: Review past conversations and decisions with a searchable chat history.
@@ -156,6 +160,11 @@ docker-compose up -d
 ```
 Frontend: http://localhost:5173
 
+You can always get the latest image by:
+
+```bash
+docker pull ghcr.io/bigsk1/claude-plus:latest
+```
 
 ### Local Docker Setup
 

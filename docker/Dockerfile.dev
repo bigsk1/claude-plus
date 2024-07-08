@@ -32,8 +32,6 @@ RUN pip install uvicorn
 # Copy backend source
 COPY backend.py shared_utils.py ./
 
-# Copy the projects folder
-COPY projects /app/projects
 
 # Copy frontend files
 COPY frontend /app/frontend

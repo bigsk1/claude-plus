@@ -16,11 +16,9 @@
 import os
 import uvicorn
 import logging
-import json
-from anthropic import AnthropicError
 from functools import wraps
 from typing import Callable
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Query, Body
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel

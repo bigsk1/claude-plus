@@ -1,11 +1,25 @@
+# This file is part of Claude Plus.
+#
+# Claude Plus is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Claude Plus is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Claude Plus.  If not, see <https://www.gnu.org/licenses/>.
 import os
 import json
+import logging
+from typing import AsyncGenerator
 from anthropic import Anthropic
 from pydantic import BaseModel
 from fastapi import HTTPException
-import logging
-from fastapi.responses import StreamingResponse
-from typing import AsyncGenerator, Any, Dict, Generator
+
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -15,7 +29,7 @@ logger = logging.getLogger(__name__)
 anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20240620")
-PROJECTS_DIR = "PROJECTS_DIR"
+PROJECTS_DIR = "projects"
 
 SEARCH_PROVIDER = os.getenv("SEARCH_PROVIDER", "SEARXNG")
 
@@ -266,12 +280,12 @@ async def start_automode_logic(request: AutomodeRequest) -> AsyncGenerator[str, 
             {"role": "user", "content": request.message}
         ]
 
-        max_iterations = 5
+        max_iterations = int(os.getenv("MAX_ITERATIONS", "5"))
 
         for i in range(max_iterations):
             response = anthropic_client.messages.create(
                 model=CLAUDE_MODEL,
-                max_tokens=2000,
+                max_tokens=4096,
                 system=system_message,
                 messages=conversation_history,
                 tools=tools
@@ -300,3 +314,4 @@ async def start_automode_logic(request: AutomodeRequest) -> AsyncGenerator[str, 
     except Exception as e:
         logger.error(f"Error in automode: {str(e)}", exc_info=True)
         yield f"data: {json.dumps({'event': 'error', 'content': str(e)})}\n\n"
+        raise HTTPException(status_code=500, detail=str(e))

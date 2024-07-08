@@ -145,7 +145,19 @@ Remember, Claude Plus is continuously learning and improving. Don't hesitate to 
 
 This project includes a Docker configuration
 
-### Development Docker Setup
+### Docker quick start 
+
+Set your .env correctly in root
+
+cd into docker folder 
+
+```yaml
+docker-compose up -d
+```
+Frontend: http://localhost:5173
+
+
+### Local Docker Setup
 
 1. Ensure Docker and Docker Compose are installed on your system.
 2. Navigate to the project root directory.

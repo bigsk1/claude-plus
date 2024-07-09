@@ -3,7 +3,7 @@
 # Claude Plus is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# at your option any later version.
 #
 # Claude Plus is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -12,21 +12,19 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with Claude Plus.  If not, see <https://www.gnu.org/licenses/>.
-
 import os
-import uvicorn
 import logging
+from typing import Optional, Callable, List
+from contextlib import asynccontextmanager
 from functools import wraps
-from typing import Callable
+import uvicorn
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
-from typing import Optional, List
 from dotenv import load_dotenv
-from contextlib import asynccontextmanager
-from config import PROJECTS_DIR, UPLOADS_DIR, SEARCH_PROVIDER
-from automode_logic import start_automode_logic, AutomodeRequest
+from automode_logic import AutomodeRequest, start_automode_logic
+from config import PROJECTS_DIR, UPLOADS_DIR, SEARCH_PROVIDER, CLAUDE_MODEL
 from shared_utils import (
     anthropic_client, system_prompt,
     perform_search, encode_image_to_base64, create_folder, create_file,
@@ -35,6 +33,8 @@ from shared_utils import (
 )
 
 load_dotenv()
+
+app = FastAPI()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -61,15 +61,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20240620")
 
-# Conversation history
-conversation_history = []
-
-# # Automode flag
-# automode = False
-
-
+class SSEMessage(BaseModel):
+    event: str
+    data: str
+    
 # Pydantic models
 class Message(BaseModel):
     role: str
@@ -78,10 +74,6 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     image: Optional[str] = None
-
-# class AutomodeRequest(BaseModel):
-#     message: str
-#     max_iterations: int = 5
 
 class SearchQuery(BaseModel):
     query: str
@@ -96,6 +88,27 @@ class CreateFileRequest(BaseModel):
 class FilePath(BaseModel):
     path: str
     content: Optional[str] = None
+
+# Conversation history
+conversation_history = []
+
+# Global state for automode
+automode_progress = 0
+automode_messages = []
+
+@app.post("/automode")
+async def start_automode(request: Request):
+    automode_request = AutomodeRequest(**await request.json())
+    return StreamingResponse(start_automode_logic(automode_request), media_type="text/event-stream")
+
+@app.get("/automode")
+async def start_automode_get(message: str):
+    automode_request = AutomodeRequest(message=message)
+    return StreamingResponse(start_automode_logic(automode_request), media_type="text/event-stream")
+
+@app.get("/automode-status")
+async def get_automode_status():
+    return {"progress": automode_progress, "messages": automode_messages}
 
 
 def is_safe_path(path: str) -> bool:
@@ -116,17 +129,6 @@ def safe_path_operation(func: Callable):
         print(f"[DEBUG] safe_path_operation: adjusted_path={kwargs['path']}")
         return await func(*args, **kwargs)
     return wrapper
-
-
-@app.post("/automode")
-async def start_automode(request: Request):
-    automode_request = AutomodeRequest(**await request.json())
-    return StreamingResponse(start_automode_logic(automode_request), media_type="text/event-stream")
-
-@app.get("/automode")
-async def start_automode_get(message: str):
-    automode_request = AutomodeRequest(message=message)
-    return StreamingResponse(start_automode_logic(automode_request), media_type="text/event-stream")
 
 
 @app.post("/create_project")
@@ -183,7 +185,7 @@ async def create_file_endpoint(path: str = Query(...), content: str = ""):
     return {"message": result}
 
 @app.get("/read_file")
-@safe_path_operation
+#@safe_path_operation
 async def read_file_endpoint(path: str = Query(...)):
     logger.debug(f"Received path: {path}")
     content = read_file_frontend(path)
@@ -300,38 +302,10 @@ async def search(query: SearchQuery):
             error_details += f"\nTraceback:\n{''.join(traceback.format_tb(e.__traceback__))}"
         raise HTTPException(status_code=500, detail=f"Error performing search: {error_details}")
 
-
-
-# System prompt update function
-# def update_system_prompt(current_iteration, max_iterations):
-#     return f"""
-#     You are Claude, an AI assistant specializing in software development. Your task is to assist with any programming or development task requested by the user. You MUST use the available tools to create files, write code, and manage project structures as needed.
-
-#     You are currently in automode, on iteration {current_iteration} out of {max_iterations}.
-
-#     Important guidelines:
-#     1. Always use the appropriate tool for file operations. Don't just describe actions, perform them using the tools provided.
-#     2. After using a tool, analyze the result and determine if further actions are needed.
-#     3. Adapt your approach based on the specific task requested by the user.
-#     4. Provide clear explanations of your actions and any code you write.
-#     5. You must use at least one tool in each iteration unless the task is complete.
-#     6. If you need to create or modify a file, use the create_file or write_to_file tool.
-#     7. If you need to check the contents of a file or directory, use the read_file or list_files tool.
-
-#     Available tools:
-#     - create_folder(path): Create a new folder
-#     - create_file(path, content): Create a new file with content
-#     - write_to_file(path, content): Write or update content in a file
-#     - read_file(path): Read the contents of a file
-#     - list_files(path): List all files and directories in the specified path
-
-#     When you've completed the requested task or reached a logical stopping point, include "AUTOMODE_COMPLETE" in your response.
-#     """
-
 # Chat endpoint
 @app.post("/chat")
 async def chat(request: ChatRequest):
-    global conversation_history, automode
+    global conversation_history  #automode
     try:
         message = request.message
         conversation_history.append({"role": "user", "content": message})
@@ -371,95 +345,6 @@ async def chat(request: ChatRequest):
         logger.error(f"Error in chat endpoint: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-# @app.post("/automode")
-# async def start_automode(request: AutomodeRequest):
-#     global conversation_history
-#     responses = []
-#     iteration_count = 0
-#     max_iterations = request.max_iterations
-
-#     try:
-#         conversation_history = []
-#         system_prompt = update_system_prompt(current_iteration=1, max_iterations=max_iterations)
-
-#         while iteration_count < max_iterations:
-#             logger.info(f"Automode iteration {iteration_count + 1}/{max_iterations}")
-
-#             message = request.message if iteration_count == 0 else "Continue with the next step of the task."
-#             conversation_history.append({"role": "user", "content": message})
-
-#             response = anthropic_client.messages.create(
-#                 model=CLAUDE_MODEL,
-#                 max_tokens=3000,
-#                 system=system_prompt,
-#                 messages=conversation_history,
-#                 tools=tools
-#             )
-
-#             logger.debug(f"Received response: {response}")
-
-#             assistant_response = ""
-#             tool_used = False
-#             tool_result_content = None
-
-#             for content in response.content:
-#                 logger.debug(f"Processing content block: {content}")
-#                 if content.type == "text":
-#                     assistant_response += content.text
-#                 elif content.type == "tool_use":
-#                     tool_used = True
-#                     tool_name = content.name
-#                     tool_input = content.input  # content.input is already a dict
-#                     logger.info(f"Executing tool: {tool_name} with input: {tool_input}")
-#                     tool_result = execute_tool(tool_name, tool_input)
-#                     tool_result_content = {
-#                         "role": "user",
-#                         "content": {
-#                             "type": "tool_result",
-#                             "tool_use_id": content.id,
-#                             "result": tool_result
-#                         }
-#                     }
-#                     assistant_response += f"\nTool used: {tool_name}\nTool result: {tool_result}\n"
-
-#             if assistant_response:
-#                 conversation_history.append({"role": "assistant", "content": assistant_response})
-#                 responses.append(assistant_response)
-
-#             if "AUTOMODE_COMPLETE" in assistant_response:
-#                 logger.info("Automode completed early")
-#                 break
-
-#             if tool_used and tool_result_content:
-#                 logger.info(f"Appending tool result content: {tool_result_content}")
-#                 conversation_history.append(tool_result_content)
-#                 follow_up_response = anthropic_client.messages.create(
-#                     model=CLAUDE_MODEL,
-#                     max_tokens=3000,
-#                     system=system_prompt,
-#                     messages=conversation_history,
-#                     tools=tools
-#                 )
-#                 follow_up_assistant_response = ""
-#                 for follow_up_content in follow_up_response.content:
-#                     logger.debug(f"Processing follow-up content block: {follow_up_content}")
-#                     if follow_up_content.type == "text":
-#                         follow_up_assistant_response += follow_up_content.text
-#                 if follow_up_assistant_response:
-#                     conversation_history.append({"role": "assistant", "content": follow_up_assistant_response})
-#                     responses.append(follow_up_assistant_response)
-
-#             iteration_count += 1
-#             system_prompt = update_system_prompt(current_iteration=iteration_count + 1, max_iterations=max_iterations)
-
-#         logger.info(f"Automode completed after {iteration_count} iterations")
-#         return {"responses": responses}
-#     except AnthropicError as e:
-#         logger.error(f"Error in automode: {str(e)}", exc_info=True)
-#         raise HTTPException(status_code=500, detail=f"Error in automode: {str(e)}")
-#     except Exception as e:
-#         logger.error(f"Error in automode: {str(e)}", exc_info=True)
-#         raise HTTPException(status_code=500, detail=str(e))
 
 tools = [
     {
@@ -578,7 +463,6 @@ def execute_tool(tool_name, tool_input):
     except Exception as e:
         logger.error(f"Error executing tool {tool_name}: {str(e)}", exc_info=True)
         return f"Error executing tool {tool_name}: {str(e)}"
-
 
 
 if __name__ == "__main__":

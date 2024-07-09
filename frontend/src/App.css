@@ -21,23 +21,32 @@
 }
 
 .react-markdown ul {
-  padding-left: 1em;
+  padding-left: 1.5em;
   list-style-type: disc;
   text-align: left;
 }
 
 .react-markdown ol {
-  padding-left: 1em;
+  padding-left: 1.5em;
   list-style-type: decimal;
   text-align: left;
 }
 
 .react-markdown p {
-  margin: 0;
+  margin: 0.5em 0;
   text-align: left;
 }
 
-/* In App.css */
+.message-box ul, .message-box ol {
+  list-style-position: inside;
+  padding-left: 0.2em;
+}
+
+.message-box li {
+  margin-bottom: 0.3em;
+}
+
+
 .chat-box {
   display: flex;
   flex-direction: column;
@@ -50,6 +59,31 @@
   word-wrap: break-word; /* Ensure long words break to fit within the box */
   padding: 0.5em 1em; /* Increase padding as needed */
   margin: 0.5em 0; /* Add some margin between messages */
+}
+
+
+.message-box ol {
+  list-style-type: decimal;
+}
+
+.message-box ul {
+  list-style-type: disc;
+}
+
+.message-box li {
+  margin-bottom: 0.3em;
+  padding-left: 0.2em;
+  display: list-item; /* Ensure proper display of list items */
+}
+
+.markdown-ol, .markdown-ul {
+  list-style-position: inside;
+}
+
+.markdown-li {
+  margin-bottom: 0.5em;
+  padding-left: 0.2em;
+  display: list-item; /* Ensure proper display of list items */
 }
 
 .search-result {

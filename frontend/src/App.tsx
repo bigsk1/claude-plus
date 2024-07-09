@@ -8,12 +8,14 @@ import {
 import { SunIcon, MoonIcon, ChevronDownIcon, AddIcon, DeleteIcon } from '@chakra-ui/icons';
 import { FaFolder, FaFile, FaImage } from 'react-icons/fa';
 import axios from 'axios';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { Components } from 'react-markdown';
 import { ChakraProvider } from '@chakra-ui/react';
 import ReactDiffViewer from 'react-diff-viewer-continued';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 import theme from './theme';
-import './App.css'; 
+import './App.css';
 
 //const API_URL = '/api';
 const API_URL = 'http://localhost:8000';
@@ -22,6 +24,13 @@ type MessageType = {
   role: string;
   content: string;
   isHtml?: boolean;
+};
+
+type CodeProps = {
+  inline?: boolean;
+  className?: string;
+  children?: React.ReactNode;
+  [key: string]: any;
 };
 
 function App() {
@@ -76,13 +85,13 @@ function App() {
         });
         const successMessage = `File uploaded: ${uploadedFile.name}`;
         setMessages((prev) => [...prev, { role: 'system', content: successMessage }]);
-  
+
         // Send the file contents to the chat endpoint
         const chatResponse = await axios.post(`${API_URL}/chat`, {
           message: `File uploaded: ${uploadedFile.name}\n\nContents:\n${response.data.file_contents}`
         });
         setMessages((prev) => [...prev, { role: 'assistant', content: chatResponse.data.response }]);
-  
+
         listFiles(currentDirectory);
       } catch (error) {
         console.error('Error uploading file:', error);
@@ -126,34 +135,45 @@ function App() {
     if (input.trim()) {
       try {
         setIsAutoMode(true);
+        setAutomodeProgress(0);
+        setMessages(prev => [...prev, { role: 'user', content: input }]);
+        setInput(''); // Clear input field
+
         const eventSource = new EventSource(`${API_URL}/automode?message=${encodeURIComponent(input)}`);
-  
+
         eventSource.onmessage = (event) => {
           const data = JSON.parse(event.data);
           if (data.event === 'message') {
-            setMessages((prev) => [...prev, { role: 'assistant', content: data.content }]);
+            setMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
+            setAutomodeProgress(prev => Math.min(prev + 20, 100)); // Example progress update
           } else if (data.event === 'end') {
             setAutomodeProgress(100);
             eventSource.close();
             setIsAutoMode(false);
+          } else if (data.event === 'error') {
+            setMessages(prev => [...prev, { role: 'system', content: data.content }]);
+            eventSource.close();
+            setIsAutoMode(false);
           }
         };
-  
+
         eventSource.onerror = (error) => {
           console.error('Error in automode:', error);
-          setMessages((prev) => [...prev, { role: 'system', content: 'Error: Automode failed' }]);
+          setMessages(prev => [...prev, { role: 'system', content: 'Error: Automode failed' }]);
           eventSource.close();
           setIsAutoMode(false);
         };
-  
-        // No need to send POST request as EventSource will handle GET request
+
+        // Cleanup on component unmount
+        return () => {
+          eventSource.close();
+        };
       } catch (error) {
         console.error('Error in automode:', error);
-        setMessages((prev) => [...prev, { role: 'system', content: 'Error: Automode failed' }]);
+        setMessages(prev => [...prev, { role: 'system', content: 'Error: Automode failed' }]);
       }
     }
   };
-  
 
   const handleSearch = async () => {
     if (searchQuery.trim()) {
@@ -178,33 +198,29 @@ function App() {
 
   const handleSend = async () => {
     if (input.trim()) {
-        setMessages((prev) => [...prev, { role: 'user', content: input }]);
-        try {
-            const response = await axios.post(`${API_URL}/chat`, { message: input });
-            setMessages((prev) => [
-                ...prev, 
-                { role: 'assistant', content: response.data.response }
-            ]);
-        } catch (error) {
-            console.error('Error sending message:', error);
-            let errorMessage = 'Error: Failed to send message';
-            if (axios.isAxiosError(error) && error.response) {
-                errorMessage += ` - ${error.response.data.detail}`;
-            }
-            setMessages((prev) => [...prev, { role: 'system', content: errorMessage }]);
-        }
-        setInput('');
+      setMessages(prev => [...prev, { role: 'user', content: input }]);
+      try {
+        const response = await axios.post(`${API_URL}/chat`, { message: input });
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: response.data.response }
+        ]);
+      } catch (error) {
+        console.error('Error sending message:', error);
+        setMessages(prev => [...prev, { role: 'system', content: 'Error: Failed to send message' }]);
+      }
+      setInput('');
     }
   };
 
   const listFiles = async (path: string) => {
     try {
-        const response = await axios.get(`${API_URL}/list_files`, { params: { path } });
-        setFiles(response.data.files || []);
-        setCurrentDirectory(response.data.currentDirectory || '');
+      const response = await axios.get(`${API_URL}/list_files`, { params: { path } });
+      setFiles(response.data.files || []);
+      setCurrentDirectory(response.data.currentDirectory || '');
     } catch (error) {
-        console.error('Error listing files:', error);
-        setFiles([]);
+      console.error('Error listing files:', error);
+      setFiles([]);
     }
   };
 
@@ -248,10 +264,10 @@ function App() {
     try {
       const response = await axios.post(`${API_URL}/write_file`, {
         content: fileContent
-      }, { 
-        params: { 
+      }, {
+        params: {
           path: `${currentDirectory}/${selectedFile}`
-        } 
+        }
       });
       alert(response.data.message);  // Show a confirmation message
       onClose();
@@ -261,27 +277,26 @@ function App() {
     }
   };
 
-
   const deleteFile = async () => {
     if (!selectedFile) {
-        alert('Please select a file or folder to delete.');
-        return;
+      alert('Please select a file or folder to delete.');
+      return;
     }
 
     const confirmDelete = window.confirm(`Are you sure you want to delete ${selectedFile}?`);
     if (!confirmDelete) {
-        return;
+      return;
     }
 
     try {
-        await axios.delete(`${API_URL}/delete_file`, {
-            params: { path: `${currentDirectory}/${selectedFile}` }
-        });
-        listFiles(currentDirectory);
-        setSelectedFile(''); // Reset selected file after deletion
+      await axios.delete(`${API_URL}/delete_file`, {
+        params: { path: `${currentDirectory}/${selectedFile}` }
+      });
+      listFiles(currentDirectory);
+      setSelectedFile(''); // Reset selected file after deletion
     } catch (error) {
-        console.error('Error deleting file:', error);
-        alert('Error deleting file. Please try again.');
+      console.error('Error deleting file:', error);
+      alert('Error deleting file. Please try again.');
     }
   };
 
@@ -330,6 +345,27 @@ function App() {
     }
   };
 
+  const customComponents: Components = {
+    code({ inline, className, children, ...props }: CodeProps) {
+      const match = /language-(\w+)/.exec(className || '');
+      return !inline && match ? (
+        <SyntaxHighlighter
+          style={atomDark}
+          language={match[1]}
+          PreTag="div"
+          showLineNumbers={true}
+          {...props}
+        >
+          {String(children).replace(/\n$/, '')}
+        </SyntaxHighlighter>
+      ) : (
+        <code className={className} {...props}>
+          {children}
+        </code>
+      );
+    }
+  };
+
   return (
     <Flex direction="column" minHeight="100vh" width="100%" className={colorMode === 'dark' ? 'dark-mode' : 'light-mode'}>
       <Flex as="header" width="100%" justifyContent="space-between" alignItems="center" p={4} bg={colorMode === 'dark' ? 'gray.700' : 'gray.100'}>
@@ -351,22 +387,27 @@ function App() {
               <TabPanel>
                 <VStack spacing={4} align="stretch" width="100%">
                   <Box className="chat-box" bg={colorMode === 'dark' ? 'gray.700' : 'gray.200'} borderRadius="md" p={4} height="50vh" overflowY="auto">
-                  {messages.map((msg, index) => (
-                    <Box
-                      key={index}
-                      className={`message-box ${msg.isHtml ? 'search-result' : ''}`}
-                      mb={2}
-                      p={3}
-                      borderRadius="md"
-                      bg={msg.isHtml ? 'transparent' : (msg.role === 'user' ? (colorMode === 'dark' ? 'blue.600' : 'blue.200') : (colorMode === 'dark' ? 'gray.600' : 'gray.300'))}
-                    >
-                      {msg.isHtml ? (
-                        <div dangerouslySetInnerHTML={{ __html: msg.content }} />
-                      ) : (
-                        msg.role === 'assistant' ? <ReactMarkdown>{msg.content}</ReactMarkdown> : formatText(msg.content)
-                      )}
-                    </Box>
-                  ))}
+                    {messages.map((msg, index) => (
+                      <Box
+                        key={index}
+                        className={`message-box ${msg.isHtml ? 'search-result' : ''}`}
+                        mb={2}
+                        p={3}
+                        borderRadius="md"
+                        bg={msg.isHtml ? 'transparent' : (msg.role === 'user' ? (colorMode === 'dark' ? 'blue.600' : 'blue.200') : (colorMode === 'dark' ? 'gray.600' : 'gray.300'))}
+                      >
+                        {msg.isHtml ? (
+                          <div dangerouslySetInnerHTML={{ __html: msg.content }} />
+                        ) : (
+                          msg.role === 'assistant' ? (
+                            <ReactMarkdown
+                              children={msg.content}
+                              components={customComponents}
+                            />
+                          ) : formatText(msg.content)
+                        )}
+                      </Box>
+                    ))}
                     <div ref={messagesEndRef} />
                   </Box>
                   <HStack>

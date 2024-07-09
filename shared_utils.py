@@ -22,7 +22,7 @@ from PIL import Image
 import io
 from dotenv import load_dotenv
 from anthropic import Anthropic
-from config import PROJECTS_DIR
+from config import PROJECTS_DIR, SEARCH_RESULTS_LIMIT, SEARCH_PROVIDER, SEARXNG_URL, TAVILY_API_KEY
 from tavily import TavilyClient
 from typing import Dict, Any
 from urllib.parse import urlparse
@@ -32,14 +32,9 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-
 # Initialize Anthropic client
 anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-# Search provider configuration
-SEARCH_PROVIDER = os.getenv("SEARCH_PROVIDER", "SEARXNG").upper()
-SEARXNG_URL = os.getenv("SEARXNG_URL", "http://192.168.60.138:8080")
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
 
 # Initialize Tavily client if needed
@@ -94,7 +89,6 @@ Important guidelines:
 Always tailor your responses to the user's specific needs and context, focusing on providing accurate, helpful, and detailed assistance in software development and project management.
 """
 
-
 def encode_image_to_base64(image_data):
     try:
         logger.debug(f"Encoding image, data type: {type(image_data)}")
@@ -146,7 +140,7 @@ def searxng_search(query: str) -> str:
         
         # Process and format the results
         formatted_results = []
-        for result in results.get('results', [])[:5]:  # Limit to top 5 results
+        for result in results.get('results', [])[:SEARCH_RESULTS_LIMIT]:
             formatted_results.append(f"**{result['title']}**\n[Link]({result['url']})\n*{result.get('content', 'No snippet available')}*\n")
         
         return "\n\n".join(formatted_results) if formatted_results else "No results found."
@@ -289,12 +283,21 @@ def read_file(path):
 def read_file_frontend(path):
     try:
         full_path = os.path.normpath(os.path.join(PROJECTS_DIR, path))
+        logger.debug(f"Attempting to read file at path: {full_path}")
+        if not os.path.exists(full_path):
+            logger.error(f"File does not exist: {full_path}")
+            return f"Error: File does not exist at path {full_path}"
+        if not os.path.isfile(full_path):
+            logger.error(f"Path is not a file: {full_path}")
+            return f"Error: Path is not a file {full_path}"
         with open(full_path, 'r') as f:
             content = f.read()
+        logger.debug(f"Successfully read file: {full_path}")
         return content
     except Exception as e:
         logger.error(f"Error reading file: {str(e)}")
         return f"Error reading file: {str(e)}"
+
 
 # AI can list files
 def list_files(path="."):

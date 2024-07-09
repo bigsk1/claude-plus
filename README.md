@@ -3,7 +3,7 @@
 Claude Plus is an advanced AI-powered development assistant that combines the capabilities of Anthropic's Claude AI with a suite of development tools. It's designed to help developers with various tasks, from coding to project management, all through an interactive chat interface.
 
 
-![Claude-plus](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/88df81c1-27b7-4713-1715-228915742600/public)
+![Claude-plus](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/a74c4783-5e39-498a-6c43-d53d7dd96c00/public)
 
 
 ## Features
@@ -100,11 +100,15 @@ Claude Plus offers a powerful suite of features to enhance your development work
 - **Code Generation**: Describe the functionality you need, and Claude will generate code snippets or entire files.
 - **Debugging Assistance**: Paste error messages or problematic code for Claude to analyze and suggest fixes.
 
+![claude](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/f3e51de7-5b42-4634-6afa-3fda6f5eb500/public)
+
 ### 2. File and Image Management
 
 - **File Upload**: Easily upload files for Claude to analyze or work with. All uploaded files are stored in the `projects/uploads` folder.
 - **Image Analysis**: Upload images for Claude to describe and analyze, useful for UI/UX discussions or diagram interpretations.
 - **Code Review**: Upload your code files for Claude to review, suggest improvements, or explain complex sections. It will not only read your files you add but can modify and even delete if requested.
+
+![claude1](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/ba7d095c-35cb-4a88-7fd0-ed63219e6a00/public)
 
 ### 3. Project Structure Management
 
@@ -114,6 +118,9 @@ Claude Plus offers a powerful suite of features to enhance your development work
 - **Delete**: Remove unnecessary files or folders to keep your project clean.
 - **Real-time Updates**: All changes in the file explorer are immediately reflected in the `projects` folder.
 
+
+![claude2](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/22834b27-1446-4585-099d-22271bef4c00/public)
+
 ### 4. Automode for Autonomous Development
 
 - **Activate Automode**: Enable Claude to work autonomously on complex tasks or entire project setups.
@@ -122,12 +129,18 @@ Claude Plus offers a powerful suite of features to enhance your development work
 - **Progress Tracking**: Monitor Claude's progress as it works through tasks in automode.
 - **Sandbox Environment**: All automode operations are confined to the `projects` folder, ensuring safe experimentation.
 
+
+![claude3](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/3ba31af9-647a-4811-a81c-455179dbda00/public)
+
 ### 5. Web Search Integration
 
 - **Integrated Search**: Perform web searches without leaving the chat interface.
 - **Multiple Providers**: Choose between SEARXNG (for privacy-focused searches) or Tavily (for AI-enhanced results).
 - **Rich Markdown Display**: Search results are presented in a readable, formatted markdown style.
 - **Context-Aware Queries**: Claude can perform searches based on your conversation context for more relevant results.
+
+![claude5](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/88df81c1-27b7-4713-1715-228915742600/public)
+
 
 ### 6. Code Execution and Testing (Coming Soon)
 

@@ -19,6 +19,7 @@ from typing import AsyncGenerator
 from anthropic import Anthropic
 from pydantic import BaseModel
 from fastapi import HTTPException
+from config import PROJECTS_DIR, CLAUDE_MODEL
 
 
 # Set up logging
@@ -28,17 +29,17 @@ logger = logging.getLogger(__name__)
 # Initialize Anthropic client
 anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20240620")
-PROJECTS_DIR = "projects"
+#CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20240620")
+#PROJECTS_DIR = "projects"
 
 SEARCH_PROVIDER = os.getenv("SEARCH_PROVIDER", "SEARXNG")
-
-class AutomodeRequest(BaseModel):
-    message: str
 
 class SSEMessage(BaseModel):
     event: str
     data: str
+
+class AutomodeRequest(BaseModel):
+    message: str
 
 def create_folder(path):
     try:
@@ -241,7 +242,11 @@ tools = [
 ]
 
 async def start_automode_logic(request: AutomodeRequest) -> AsyncGenerator[str, None]:
+    global automode_progress, automode_messages
     try:
+        automode_progress = 0
+        automode_messages = []
+        
         system_message = """
         You are an AI assistant capable of performing software development tasks.
         You have access to tools that can create folders and files.
@@ -301,17 +306,26 @@ async def start_automode_logic(request: AutomodeRequest) -> AsyncGenerator[str, 
                     tool_result = execute_tool(tool_name, tool_input)
                     assistant_response += f"Used tool: {tool_name}\nResult: {tool_result}\n\n"
 
+            automode_messages.append({"role": "assistant", "content": assistant_response})
+            automode_progress = (i + 1) / max_iterations * 100
+
+            logger.debug(f"Progress: {automode_progress}, Messages: {automode_messages}")
+
             yield f"data: {json.dumps({'event': 'message', 'content': assistant_response})}\n\n"
-            conversation_history.append({"role": "assistant", "content": assistant_response})
 
             if "AUTOMODE_COMPLETE" in assistant_response:
                 break
 
+            conversation_history.append({"role": "assistant", "content": assistant_response})
             conversation_history.append({"role": "user", "content": "Continue with the next step if necessary."})
 
+        automode_progress = 100
         yield f"data: {json.dumps({'event': 'end'})}\n\n"
+        logger.debug(f"Final Progress: {automode_progress}, Messages: {automode_messages}")
 
     except Exception as e:
         logger.error(f"Error in automode: {str(e)}", exc_info=True)
+        automode_messages.append({"role": "system", "content": f"Error: {str(e)}"})
+        automode_progress = 100
         yield f"data: {json.dumps({'event': 'error', 'content': str(e)})}\n\n"
         raise HTTPException(status_code=500, detail=str(e))

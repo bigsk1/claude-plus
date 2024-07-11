@@ -8,14 +8,14 @@ Claude Plus is an advanced AI-powered development assistant that combines the ca
 
 ## Features
 
-- 🧠 **Interact with Claude-3.5-Sonnet**: Engage with the advanced AI for insightful and precise assistance.
-- 📁 **File System Manipulation**: Create, read, and write files and folders seamlessly.
-- 🔍 **Powerful Search**: Utilize Tavily API or SearXNG to perform comprehensive searches.
-- 💡 **Code Snippet Management**: Highlight and manage code snippets efficiently.
+- 🧠 **Interact with Claude-3.5-Sonnet**: Engage with the advanced AI, ask to build your ideas and code files and folders are made!.
+- 📁 **File System Manipulation**: Claude will create, read, write and delete files and folders seamlessly on your system.
+- 🔍 **Powerful Search**: Utilize Tavily API or SearXNG to perform comprehensive searches. Claude also has search tool built in.
+- 💡 **Code Snippet Management**: Highlight and manage code snippets efficiently. Have questions about an existing project drop the folder in the projects directory and Claude will have full access. 
 - 📂 **Project Structure Management**: Build and maintain complex project structures with ease.
 - 🔧 **Code Analysis and Suggestions**: Receive detailed analysis and improvement suggestions for your code.
 - 🖼️ **Image Analysis**: Analyze images and gain insights with AI-powered image support.
-- ⚙️ **Automode**: Automate tasks for increased efficiency and productivity.
+- ⚙️ **Automode**: Automate tasks for increased efficiency and productivity. Set max iterations in env and Claude will cycle through that number of times automaticlly. 
 - 🔄 **Iterative Tracking**: Monitor changes and iterations accurately during automode sessions.
 - ✂️ **Diff-Based Editing**: Edit files using diff-based techniques for precise modifications.
 

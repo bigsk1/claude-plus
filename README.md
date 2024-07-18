@@ -18,7 +18,7 @@ Claude Plus is an advanced AI-powered development assistant that combines the ca
 - ⚙️ **Automode**: Automate tasks for increased efficiency and productivity. Set max iterations in env and Claude will cycle through that number of times automaticlly. 
 - 🔄 **Iterative Tracking**: Monitor changes and iterations accurately during automode sessions.
 - ✂️ **Diff-Based Editing**: Edit files using diff-based techniques for precise modifications.
-- NEW console tab added - You able able to run commands in UI just like a terminal
+- 💻 **NEW console** feature - You are able to run commands in the UI just like a terminal. Run python scripts within the UI!
 
 This application leverages the power of Claude to enhance your development workflow, providing robust tools for file management, search, code analysis, and automation.
 

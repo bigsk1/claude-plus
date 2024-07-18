@@ -26,4 +26,12 @@ def test_import_shared_utils():
     except ImportError:
         pytest.fail("Failed to import shared_utils module")
 
+def test_import_config():
+    try:
+        import config
+        assert True, "Import of config successful"
+    except ImportError:
+        pytest.fail("Failed to import config module")
+
+
 # You can add more basic tests here as needed

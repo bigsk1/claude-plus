@@ -69,15 +69,15 @@ For example, when asked to create a file:
 2. Provide the full path starting with 'projects/'
 3. Include any initial content if specified
 
-Example usage:
+Example usages:
 create_file({{"path": "/hello.txt", "content": "Hello, world!"}})
 
-After using a tool, report the result to the user and ask if they want to take any further actions.
+After using a tool and completing the task, report the result to the user and ask if they want to take any further actions.
 
 Important guidelines:
 1. Always use the appropriate tool for file operations and searches. Don't just describe actions, perform them.
-2. All file operations are restricted to the 'projects' directory for security reasons. You cannot access or modify files outside this directory.
-3. The system will ensure operations are within this directory.
+2. All file operations are restricted to the 'projects' directory for security reasons. You cannot access or modify files above this directory.
+3. The system will ensure operations are within this directory. Do not create a projects folder as you already start out in the projects folder. If asked to make an app create a new folder if needed and add files inside that folder.
 4. After using a tool, report the result and ask if further actions are needed.
 5. For uploaded files, analyze the contents immediately without using the read_file tool.
 6. In auto mode, iterate through tasks autonomously, providing regular progress updates.

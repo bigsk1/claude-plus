@@ -1,66 +1,77 @@
-import React, { useState, useRef } from 'react';
-import axios, { AxiosError } from 'axios';
-import {
-  Box, Input, VStack, Text, useColorMode, Button,
-} from '@chakra-ui/react';
+import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
+import { Box, Input, VStack, Text, useColorMode } from '@chakra-ui/react';
 
 const API_URL = 'http://127.0.0.1:8000';
 
-interface ErrorResponse {
-  detail: string;
+interface TerminalLine {
+  content: string;
+  isCommand: boolean;
 }
 
 const Console: React.FC = () => {
   const [input, setInput] = useState('');
-  const [output, setOutput] = useState<string[]>([]);
-  const [cwd, setCwd] = useState('');
-  const outputRef = useRef<HTMLDivElement>(null);
+  const [history, setHistory] = useState<TerminalLine[]>([]);
+  const [currentDirectory, setCurrentDirectory] = useState('');
   const { colorMode } = useColorMode();
+  const terminalRef = useRef<HTMLDivElement>(null);
 
-  const runCommand = async (command: string) => {
+  useEffect(() => {
+    fetchCurrentDirectory();
+  }, []);
+
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [history]);
+
+  const fetchCurrentDirectory = async () => {
     try {
-      const trimmedInput = command.trim();
-      setOutput(prev => [...prev, `$ ${trimmedInput}`]);
-      
-      if (trimmedInput === 'clear') {
-        setOutput([]);
-      } else {
-        const response = await axios.post(`${API_URL}/api/execute`, { command: trimmedInput });
-        setOutput(prev => [...prev, response.data.result]);
-        if (response.data.cwd) {
-          setCwd(response.data.cwd);
-        }
+      const response = await axios.get(`${API_URL}/api/console/cwd`);
+      setCurrentDirectory(response.data.cwd);
+    } catch (error) {
+      console.error('Error fetching current directory:', error);
+      addToHistory('Error fetching current directory', false);
+    }
+  };
+
+  const addToHistory = (content: string, isCommand: boolean) => {
+    setHistory(prev => [...prev, { content, isCommand }]);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+
+    addToHistory(`${currentDirectory}$ ${input}`, true);
+    
+    if (input.trim().toLowerCase() === 'clear') {
+      setHistory([]);
+      setInput('');
+      return;
+    }
+
+    try {
+      const response = await axios.post(`${API_URL}/api/console/execute`, { command: input });
+      if (response.data.result) {
+        addToHistory(response.data.result, false);
+      }
+      if (response.data.cwd) {
+        setCurrentDirectory(response.data.cwd);
       }
     } catch (error) {
       console.error('Error executing command:', error);
-      let errorMessage = 'Error executing command. Please check the console for details.';
-
-      if (axios.isAxiosError(error)) {
-        const axiosError = error as AxiosError<ErrorResponse>;
-        if (axiosError.response) {
-          errorMessage = `Error: ${axiosError.response.data.detail || 'Unknown error'}`;
-        } else if (axiosError.request) {
-          errorMessage = 'Error: No response received from server';
-        } else {
-          errorMessage = `Error: ${axiosError.message}`;
-        }
-      }
-
-      setOutput(prev => [...prev, errorMessage]);
+      addToHistory('Error executing command. Please check the console for details.', false);
     }
+
     setInput('');
-  };
-
-  const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      await runCommand(input);
-    }
   };
 
   return (
     <VStack spacing={4} align="stretch" height="100%">
       <Box
-        ref={outputRef}
+        ref={terminalRef}
         bg={colorMode === 'dark' ? 'gray.800' : 'gray.100'}
         color={colorMode === 'dark' ? 'white' : 'black'}
         p={4}
@@ -71,26 +82,21 @@ const Console: React.FC = () => {
         whiteSpace="pre-wrap"
         textAlign="left"
       >
-        {output.map((line, index) => (
-          <Text key={index}>{line}</Text>
+        {history.map((line, index) => (
+          <Text key={index} fontWeight={line.isCommand ? 'bold' : 'normal'}>
+            {line.content}
+          </Text>
         ))}
       </Box>
-      <Box display="flex">
-        <Text mr={2} fontWeight="bold">{cwd}$</Text>
+      <form onSubmit={handleSubmit}>
         <Input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Enter command (type 'clear' to clear console)"
-          flex={1}
+          placeholder={`${currentDirectory}$ `}
+          bg={colorMode === 'dark' ? 'gray.700' : 'white'}
+          color={colorMode === 'dark' ? 'white' : 'black'}
         />
-      </Box>
-      <Box>
-        <Button onClick={() => runCommand('python --version')} mr={2}>Python Version</Button>
-        <Button onClick={() => runCommand('conda info --envs')} mr={2}>Conda Environments</Button>
-        <Button onClick={() => runCommand('pip list')} mr={2}>Installed Packages</Button>
-        <Button onClick={() => setOutput([])} colorScheme="red">Clear Console</Button>
-      </Box>
+      </form>
     </VStack>
   );
 };

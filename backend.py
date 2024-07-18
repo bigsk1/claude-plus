@@ -358,54 +358,99 @@ async def chat(request: ChatRequest):
         logger.error(f"Error in chat endpoint: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-def get_executable():
-    if platform.system() == "Windows":
-        return shutil.which("cmd.exe")
-    else:
-        return shutil.which("bash")
+def get_shell():
+    return "cmd.exe" if platform.system() == "Windows" else "/bin/bash"
 
-@api_router.post("/execute")
-async def execute_command(request: CommandRequest):
-    try:
-        # Set the working directory to the projects folder
+def execute_shell_command(command, cwd):
+    shell = get_shell()
+    if platform.system() == "Windows":
+        result = subprocess.run([shell, "/c", command], capture_output=True, text=True, cwd=cwd)
+    else:
+        result = subprocess.run([shell, "-c", command], capture_output=True, text=True, cwd=cwd)
+    return result.stdout + result.stderr
+
+def ensure_in_projects_dir():
+    if not os.getcwd().startswith(PROJECTS_DIR):
         os.chdir(PROJECTS_DIR)
-        
+
+@api_router.post("/console/execute")
+async def console_execute_command(request: CommandRequest):
+    try:
+        ensure_in_projects_dir()
+        cwd = os.getcwd()
         command_parts = request.command.split()
-        if command_parts[0] == 'python':
-            # If it's a Python command, use the Python interpreter
-            executable = shutil.which("python")
-            if not executable:
-                raise FileNotFoundError("Python executable not found")
-            result = subprocess.run(
-                [executable] + command_parts[1:],
-                shell=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                check=False
-            )
+        cmd = command_parts[0].lower()
+
+        if cmd == "cd":
+            return handle_cd(command_parts[1] if len(command_parts) > 1 else "")
+        elif cmd == "ls" or (cmd == "dir" and platform.system() == "Windows"):
+            return handle_ls(cwd)
+        elif cmd == "pwd":
+            return handle_pwd(cwd)
+        elif cmd == "echo":
+            return handle_echo(command_parts[1:], cwd)
+        elif cmd == "cat" or cmd == "type":
+            return handle_cat(command_parts[1] if len(command_parts) > 1 else "", cwd)
+        elif cmd == "mkdir":
+            return handle_mkdir(command_parts[1] if len(command_parts) > 1 else "", cwd)
+        elif cmd == "touch" or cmd == "echo.":
+            return handle_touch(command_parts[1] if len(command_parts) > 1 else "", cwd)
         else:
-            # For other commands, use the system shell
-            executable = get_executable()
-            if not executable:
-                raise FileNotFoundError("Shell executable not found")
-            result = subprocess.run(
-                [executable, "/c" if os.name == "nt" else "-c", request.command],
-                shell=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                check=False
-            )
-        
-        output = result.stdout + result.stderr
-        return {"result": output, "cwd": os.getcwd()}
-    except FileNotFoundError as e:
-        logger.error(f"FileNotFoundError in execute_command: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=404, detail=str(e))
+            output = execute_shell_command(request.command, cwd)
+            return {"result": output, "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
     except Exception as e:
-        logger.error(f"Error in execute_command: {str(e)}", exc_info=True)
+        logger.error(f"Error in console_execute_command: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+def handle_cd(path):
+    try:
+        new_path = os.path.abspath(os.path.join(os.getcwd(), path))
+        if os.path.exists(new_path) and os.path.isdir(new_path) and new_path.startswith(PROJECTS_DIR):
+            os.chdir(new_path)
+            current_dir = os.path.relpath(os.getcwd(), PROJECTS_DIR)
+            return {"result": f"Changed directory to: {current_dir}", "cwd": current_dir}
+        else:
+            return {"result": f"Directory not found or access denied: {path}", "cwd": os.path.relpath(os.getcwd(), PROJECTS_DIR)}
+    except Exception as e:
+        return {"result": f"Error changing directory: {str(e)}", "cwd": os.path.relpath(os.getcwd(), PROJECTS_DIR)}
+
+def handle_ls(cwd):
+    items = os.listdir(cwd)
+    return {"result": "\n".join(items), "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+
+def handle_pwd(cwd):
+    return {"result": cwd, "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+
+def handle_echo(args, cwd):
+    return {"result": " ".join(args), "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+
+def handle_cat(filename, cwd):
+    try:
+        with open(os.path.join(cwd, filename), 'r') as file:
+            content = file.read()
+        return {"result": content, "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+    except Exception as e:
+        return {"result": f"Error reading file: {str(e)}", "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+
+def handle_mkdir(dirname, cwd):
+    try:
+        os.mkdir(os.path.join(cwd, dirname))
+        return {"result": f"Directory created: {dirname}", "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+    except Exception as e:
+        return {"result": f"Error creating directory: {str(e)}", "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+
+def handle_touch(filename, cwd):
+    try:
+        with open(os.path.join(cwd, filename), 'a'):
+            os.utime(os.path.join(cwd, filename), None)
+        return {"result": f"File touched: {filename}", "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+    except Exception as e:
+        return {"result": f"Error touching file: {str(e)}", "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+
+@api_router.get("/console/cwd")
+async def console_get_current_working_directory():
+    ensure_in_projects_dir()
+    return {"cwd": os.path.relpath(os.getcwd(), PROJECTS_DIR)}
 
 @api_router.post("/run_python")
 async def run_python(request: CommandRequest):
@@ -431,28 +476,6 @@ async def run_python(request: CommandRequest):
         logger.error(f"Error in run_python: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-@api_router.get("/cwd")
-async def get_current_working_directory():
-    return {"cwd": os.path.relpath(os.getcwd(), PROJECTS_DIR)}
-
-@api_router.get("/ls")
-async def list_directory(path: str = "."):
-    try:
-        full_path = os.path.join(PROJECTS_DIR, path)
-        contents = os.listdir(full_path)
-        return DirectoryContents(path=path, contents=contents)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/cd")
-async def change_directory(request: CommandRequest):
-    try:
-        new_dir = os.path.join(PROJECTS_DIR, request.command)
-        os.chdir(new_dir)
-        return {"cwd": os.path.relpath(os.getcwd(), PROJECTS_DIR)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 @api_router.post("/pip_install")
 async def pip_install(request: CommandRequest):
     try:
@@ -462,7 +485,7 @@ async def pip_install(request: CommandRequest):
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            executable=get_executable()
+            executable=get_shell()
         )
         output = result.stdout.decode('utf-8') + result.stderr.decode('utf-8')
         return {"result": output}

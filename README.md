@@ -3,7 +3,7 @@
 Claude Plus is an advanced AI-powered development assistant that combines the capabilities of Anthropic's Claude AI with a suite of development tools. It's designed to help developers with various tasks, from coding to project management, all through an interactive chat interface.
 
 
-![Claude-plus](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/a74c4783-5e39-498a-6c43-d53d7dd96c00/public)
+![ClaudePlus](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/b826eaf4-571d-4ad3-2796-1dd9eb69e600/public)
 
 
 ## Features

@@ -17,8 +17,11 @@ import logging
 from typing import Optional, Callable, List
 from contextlib import asynccontextmanager
 from functools import wraps
+import subprocess
+import platform
+import shutil
 import uvicorn
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Query
+from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
@@ -35,6 +38,8 @@ from shared_utils import (
 load_dotenv()
 
 app = FastAPI()
+
+api_router = APIRouter()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -88,6 +93,14 @@ class CreateFileRequest(BaseModel):
 class FilePath(BaseModel):
     path: str
     content: Optional[str] = None
+
+class CommandRequest(BaseModel):
+    command: str
+
+class DirectoryContents(BaseModel):
+    path: str
+    contents: List[str]
+
 
 # Conversation history
 conversation_history = []
@@ -345,6 +358,121 @@ async def chat(request: ChatRequest):
         logger.error(f"Error in chat endpoint: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+def get_executable():
+    if platform.system() == "Windows":
+        return shutil.which("cmd.exe")
+    else:
+        return shutil.which("bash")
+
+@api_router.post("/execute")
+async def execute_command(request: CommandRequest):
+    try:
+        # Set the working directory to the projects folder
+        os.chdir(PROJECTS_DIR)
+        
+        command_parts = request.command.split()
+        if command_parts[0] == 'python':
+            # If it's a Python command, use the Python interpreter
+            executable = shutil.which("python")
+            if not executable:
+                raise FileNotFoundError("Python executable not found")
+            result = subprocess.run(
+                [executable] + command_parts[1:],
+                shell=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False
+            )
+        else:
+            # For other commands, use the system shell
+            executable = get_executable()
+            if not executable:
+                raise FileNotFoundError("Shell executable not found")
+            result = subprocess.run(
+                [executable, "/c" if os.name == "nt" else "-c", request.command],
+                shell=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False
+            )
+        
+        output = result.stdout + result.stderr
+        return {"result": output, "cwd": os.getcwd()}
+    except FileNotFoundError as e:
+        logger.error(f"FileNotFoundError in execute_command: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error in execute_command: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/run_python")
+async def run_python(request: CommandRequest):
+    try:
+        python_executable = shutil.which("python")
+        if not python_executable:
+            raise FileNotFoundError("Python executable not found")
+        
+        result = subprocess.run(
+            [python_executable, "-c", request.command],
+            shell=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False
+        )
+        output = result.stdout + result.stderr
+        return {"result": output}
+    except FileNotFoundError as e:
+        logger.error(f"FileNotFoundError in run_python: {str(e)}", exc_info=True)
+        return {"result": f"Error: {str(e)}"}
+    except Exception as e:
+        logger.error(f"Error in run_python: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/cwd")
+async def get_current_working_directory():
+    return {"cwd": os.path.relpath(os.getcwd(), PROJECTS_DIR)}
+
+@api_router.get("/ls")
+async def list_directory(path: str = "."):
+    try:
+        full_path = os.path.join(PROJECTS_DIR, path)
+        contents = os.listdir(full_path)
+        return DirectoryContents(path=path, contents=contents)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/cd")
+async def change_directory(request: CommandRequest):
+    try:
+        new_dir = os.path.join(PROJECTS_DIR, request.command)
+        os.chdir(new_dir)
+        return {"cwd": os.path.relpath(os.getcwd(), PROJECTS_DIR)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/pip_install")
+async def pip_install(request: CommandRequest):
+    try:
+        result = subprocess.run(
+            f"pip install {request.command}",
+            shell=True,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            executable=get_executable()
+        )
+        output = result.stdout.decode('utf-8') + result.stderr.decode('utf-8')
+        return {"result": output}
+    except subprocess.CalledProcessError as e:
+        return {"result": f"Error: {e.stderr.decode('utf-8')}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+app.include_router(api_router, prefix="/api")
 
 tools = [
     {

@@ -16,9 +16,10 @@ import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 import theme from './theme';
 import './App.css';
+import Console from './components/Console';
 
 //const API_URL = '/api';
-const API_URL = 'http://localhost:8000';
+const API_URL = 'http://127.0.0.1:8000';
 
 type MessageType = {
   role: string;
@@ -382,6 +383,7 @@ function App() {
             <TabList mb="1em">
               <Tab _selected={{ color: "white", bg: "blue.500" }}>Chat</Tab>
               <Tab _selected={{ color: "white", bg: "blue.500" }}>Files</Tab>
+              <Tab _selected={{ color: "white", bg: "blue.500" }}>Console</Tab>
             </TabList>
             <TabPanels>
               <TabPanel>
@@ -506,6 +508,9 @@ function App() {
                     )}
                   </VStack>
                 </VStack>
+                </TabPanel>
+                <TabPanel>
+                <Console />
               </TabPanel>
             </TabPanels>
           </Tabs>

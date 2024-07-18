@@ -4,11 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "vite --host 0.0.0.0 --port 5173",
     "build": "tsc --noEmit && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "test": "jest --watchAll=false",
-    "preview": "vite preview"
+    "preview": "vite preview --port 5173",
+    "start": "vite preview --port 5173"
   },
   "dependencies": {
     "@chakra-ui/icons": "^2.1.1",

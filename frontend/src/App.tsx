@@ -369,7 +369,7 @@ function App() {
   return (
     <Flex direction="column" minHeight="100vh" width="100%" className={colorMode === 'dark' ? 'dark-mode' : 'light-mode'}>
       <Flex as="header" width="100%" justifyContent="space-between" alignItems="center" p={4} bg={colorMode === 'dark' ? 'gray.700' : 'gray.100'}>
-        <Text fontSize="2xl" fontWeight="bold">🤖 Claude Plus</Text>
+        <Text fontSize="2xl" fontWeight="bold">Claude Plus</Text>
         <IconButton
           icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
           onClick={toggleColorMode}
@@ -512,25 +512,27 @@ function App() {
         </Box>
       </Flex>
       <Flex as="footer" width="100%" justifyContent="center" p={4} bg={colorMode === 'dark' ? 'gray.700' : 'gray.100'}>
-        <InputGroup size="md" maxWidth="800px">
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder="Search the web..."
-            bg={colorMode === 'dark' ? 'gray.600' : 'gray.200'}
-            pr="4.5rem"
-          />
-          <Button
-            position="absolute"
-            right="0"
-            top="0"
-            h="100%"
-            onClick={handleSearch}
-          >
-            Search
-          </Button>
-        </InputGroup>
+        <Box width="70%">
+          <InputGroup size="md" maxWidth="600px" margin="auto">
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="Search the web..."
+              bg={colorMode === 'dark' ? 'gray.600' : 'gray.200'}
+              pr="4.5rem"
+            />
+            <Button
+              position="absolute"
+              right="0"
+              top="0"
+              h="100%"
+              onClick={handleSearch}
+            >
+              Search
+            </Button>
+          </InputGroup>
+        </Box>
       </Flex>
       <Modal isOpen={isOpen} onClose={onClose} size="6xl">
         <ModalOverlay />

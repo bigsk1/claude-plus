@@ -84,7 +84,7 @@ This application leverages the power of Claude to enhance your development workf
 
    ```
    cd frontend
-   npm start
+   npm run dev
    ```
 
 3. Open your browser and navigate to `http://localhost:5173/`

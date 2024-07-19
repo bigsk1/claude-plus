@@ -3,13 +3,13 @@
 Claude Plus is an advanced AI-powered development assistant that combines the capabilities of Anthropic's Claude AI with a suite of development tools. It's designed to help developers with various tasks, from coding to project management, all through an interactive chat interface.
 
 
-![ClaudePlus](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/b826eaf4-571d-4ad3-2796-1dd9eb69e600/public)
+![ClaudePlus](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/fe5c16e9-1c8b-4134-a743-1e1bbf72c500/public)
 
 
 ## Features
 
 - 🧠 **Interact with Claude-3.5-Sonnet**: Engage with the advanced AI, ask to build your ideas and code files and folders are made!.
-- 📁 **File System Manipulation**: Claude will create, read, write and delete files and folders seamlessly on your system.
+- 📁 **File System Manipulation**: Claude will create, read, write and delete files and folders seamlessly on your system. The files tab shows date modified and size of files and folders in a list or grid view. 
 - 🔍 **Powerful Search**: Utilize Tavily API or SearXNG to perform comprehensive searches. Claude also has search tool built in.
 - 💡 **Code Snippet Management**: Highlight and manage code snippets efficiently. Have questions about an existing project drop the folder in the projects directory and Claude will have full access. 
 - 📂 **Project Structure Management**: Build and maintain complex project structures with ease.
@@ -19,6 +19,7 @@ Claude Plus is an advanced AI-powered development assistant that combines the ca
 - 🔄 **Iterative Tracking**: Monitor changes and iterations accurately during automode sessions.
 - ✂️ **Diff-Based Editing**: Edit files using diff-based techniques for precise modifications.
 - 💻 **NEW console** feature - You are able to run commands in the UI just like a terminal. Run python scripts within the UI!
+- ⬇️ **NEW download projects folder** You can download the entire projects directory with all your created folders and files directly from the UI now. 
 
 This application leverages the power of Claude to enhance your development workflow, providing robust tools for file management, search, code analysis, and automation.
 
@@ -109,7 +110,7 @@ Claude Plus offers a powerful suite of features to enhance your development work
 - **Image Analysis**: Upload images for Claude to describe and analyze, useful for UI/UX discussions or diagram interpretations.
 - **Code Review**: Upload your code files for Claude to review, suggest improvements, or explain complex sections. It will not only read your files you add but can modify and even delete if requested.
 
-![claude1](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/ba7d095c-35cb-4a88-7fd0-ed63219e6a00/public)
+![claude1](https://imagedelivery.net/WfhVb8dSNAAvdXUdMfBuPQ/e142e52d-f257-4c5e-adbb-a1d1e75ba300/public)
 
 ### 3. Project Structure Management
 

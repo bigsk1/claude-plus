@@ -3,21 +3,23 @@ import {
   Box, VStack, HStack, Button, Input, useColorMode,
   Tabs, TabList, TabPanels, Tab, TabPanel, Text, Modal, ModalOverlay, ModalContent,
   ModalHeader, ModalFooter, ModalBody, ModalCloseButton, useDisclosure, Flex, IconButton,
-  Menu, MenuButton, MenuList, MenuItem, InputGroup, Progress, Textarea, Checkbox, useToast
+  Menu, MenuButton, MenuList, MenuItem, InputGroup, Progress, Textarea, useToast
 } from '@chakra-ui/react';
 import { SunIcon, MoonIcon, ChevronDownIcon, AddIcon, DeleteIcon } from '@chakra-ui/icons';
-import { FaFolder, FaFile, FaImage } from 'react-icons/fa';
+import { FaImage, FaDownload } from 'react-icons/fa';
 import axios from 'axios';
 import ReactMarkdown, { Components } from 'react-markdown';
 import { ChakraProvider } from '@chakra-ui/react';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { FaDownload } from 'react-icons/fa';
+
 
 import theme from './theme';
 import './App.css';
+import FileListing from './FileListing'; 
 import Console from './components/Console';
+import { FileItem } from './types';
 
 //const API_URL = '/api';
 const API_URL = 'http://127.0.0.1:8000';
@@ -35,13 +37,14 @@ type CodeProps = {
   [key: string]: any;
 };
 
+
 function App() {
   const [input, setInput] = useState('');
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [isAutoMode, setIsAutoMode] = useState(false);
   const [currentDirectory, setCurrentDirectory] = useState('');
-  const [files, setFiles] = useState<{ name: string; isDirectory: boolean }[]>([]);
+  const [files, setFiles] = useState<FileItem[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -303,13 +306,26 @@ function App() {
     }
   };
 
+  const handleFileClick = (file: FileItem) => {
+    if (file.isDirectory) {
+      navigateDirectory(file.name);
+    } else {
+      readFile(file.name);
+    }
+  };
+
+  const handleSelectFile = (fileName: string) => {
+    setSelectedFile(prevSelected => prevSelected === fileName ? null : fileName);
+  };
+
   const navigateDirectory = (dirName: string) => {
     if (dirName === '..') {
       const parentDir = currentDirectory.split('/').slice(0, -1).join('/');
-      setCurrentDirectory(parentDir || '');  // Navigate to root if at top level
+      setCurrentDirectory(parentDir || '.');
     } else {
-      setCurrentDirectory(`${currentDirectory}/${dirName}`);
+      setCurrentDirectory(prevDir => prevDir === '.' ? dirName : `${prevDir}/${dirName}`);
     }
+    listFiles(dirName === '..' ? currentDirectory.split('/').slice(0, -1).join('/') || '.' : `${currentDirectory}/${dirName}`);
   };
 
   const createProjectTemplate = async (templateName: string) => {
@@ -513,10 +529,9 @@ function App() {
                     onChange={handleImageUpload}
                   />
                 </VStack>
-              </TabPanel>
+                </TabPanel>
               <TabPanel>
                 <VStack spacing={4} align="stretch">
-                  <Text>Current Directory: {currentDirectory}</Text>
                   <HStack justifyContent="space-between">
                     <Text>Files and Folders:</Text>
                     <HStack>
@@ -526,37 +541,15 @@ function App() {
                       <Button onClick={deleteFile} leftIcon={<DeleteIcon />} colorScheme="red">Delete</Button>
                     </HStack>
                   </HStack>
-                  <VStack align="stretch" bg={colorMode === 'dark' ? 'gray.700' : 'gray.200'} borderRadius="md" p={4} maxHeight="60vh" overflowY="auto">
-                    {currentDirectory !== '' && (
-                      <Button onClick={() => navigateDirectory('..')} justifyContent="flex-start" variant="ghost" leftIcon={<FaFolder />}>
-                        ..
-                      </Button>
-                    )}
-                    {Array.isArray(files) && files.length > 0 ? (
-                      files.map((file, index) => (
-                        <HStack key={index} spacing={4} align="center">
-                          <Button
-                            onClick={() => file.isDirectory ? navigateDirectory(file.name) : readFile(file.name)}
-                            justifyContent="flex-start"
-                            variant="ghost"
-                            leftIcon={file.isDirectory ? <FaFolder /> : <FaFile />}
-                            _hover={{ bg: colorMode === 'dark' ? "gray.600" : "gray.300" }}
-                            flex="1"
-                          >
-                            {file.name}
-                          </Button>
-                          <Checkbox
-                            onChange={() => setSelectedFile(selectedFile === file.name ? '' : file.name)}
-                            isChecked={selectedFile === file.name}
-                          />
-                        </HStack>
-                      ))
-                    ) : (
-                      <Text>No files found</Text>
-                    )}
-                  </VStack>
+                  <FileListing 
+                    files={files} 
+                    onFileClick={handleFileClick}
+                    currentDirectory={currentDirectory}
+                    selectedFile={selectedFile}
+                    onSelectFile={handleSelectFile}
+                  />
                 </VStack>
-                </TabPanel>
+              </TabPanel>
                 <TabPanel>
                 <Console />
               </TabPanel>

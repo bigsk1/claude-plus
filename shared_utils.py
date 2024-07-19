@@ -26,6 +26,7 @@ from config import PROJECTS_DIR, SEARCH_RESULTS_LIMIT, SEARCH_PROVIDER, SEARXNG_
 from tavily import TavilyClient
 from typing import Dict, Any
 from urllib.parse import urlparse
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -313,7 +314,14 @@ def list_files_frontend(path="."):
         full_path = os.path.normpath(os.path.join(PROJECTS_DIR, path))
         logger.debug(f"list_files: original_path={path}, full_path={full_path}")
         files_and_dirs = os.listdir(full_path)
-        return [{"name": f, "isDirectory": os.path.isdir(os.path.join(full_path, f))} for f in files_and_dirs]
+        return [
+            {
+                "name": f,
+                "isDirectory": os.path.isdir(os.path.join(full_path, f)),
+                "size": os.path.getsize(os.path.join(full_path, f)) if not os.path.isdir(os.path.join(full_path, f)) else "-",
+                "modifiedDate": datetime.fromtimestamp(os.path.getmtime(os.path.join(full_path, f))).strftime('%Y-%m-%d %H:%M:%S')
+            } for f in files_and_dirs
+        ]
     except Exception as e:
         logger.error(f"Error listing files: {str(e)}")
         return []

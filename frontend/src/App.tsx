@@ -3,7 +3,7 @@ import {
   Box, VStack, HStack, Button, Input, useColorMode,
   Tabs, TabList, TabPanels, Tab, TabPanel, Text, Modal, ModalOverlay, ModalContent,
   ModalHeader, ModalFooter, ModalBody, ModalCloseButton, useDisclosure, Flex, IconButton,
-  Menu, MenuButton, MenuList, MenuItem, InputGroup, Progress, Textarea, Checkbox
+  Menu, MenuButton, MenuList, MenuItem, InputGroup, Progress, Textarea, Checkbox, useToast
 } from '@chakra-ui/react';
 import { SunIcon, MoonIcon, ChevronDownIcon, AddIcon, DeleteIcon } from '@chakra-ui/icons';
 import { FaFolder, FaFile, FaImage } from 'react-icons/fa';
@@ -13,6 +13,7 @@ import { ChakraProvider } from '@chakra-ui/react';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { FaDownload } from 'react-icons/fa';
 
 import theme from './theme';
 import './App.css';
@@ -52,6 +53,7 @@ function App() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const toast = useToast();
 
   useEffect(() => {
     listFiles(currentDirectory);
@@ -346,6 +348,44 @@ function App() {
     }
   };
 
+  const handleDownloadProjects = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/download_projects`, { 
+        responseType: 'blob',
+        timeout: 30000 // 30 seconds timeout
+      });
+      
+      const blob = new Blob([response.data], { type: 'application/zip' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'projects.zip');
+      document.body.appendChild(link);
+      link.click();
+      if (link.parentNode) {
+        link.parentNode.removeChild(link);
+      }
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: "Download Started",
+        description: "Your projects folder is being downloaded.",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error('Error downloading projects:', error);
+      toast({
+        title: "Download Failed",
+        description: "There was an error downloading the projects folder. Please try again.",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  };
+
   const customComponents: Components = {
     code({ inline, className, children, ...props }: CodeProps) {
       const match = /language-(\w+)/.exec(className || '');
@@ -371,11 +411,19 @@ function App() {
     <Flex direction="column" minHeight="100vh" width="100%" className={colorMode === 'dark' ? 'dark-mode' : 'light-mode'}>
       <Flex as="header" width="100%" justifyContent="space-between" alignItems="center" p={4} bg={colorMode === 'dark' ? 'gray.700' : 'gray.100'}>
         <Text fontSize="2xl" fontWeight="bold">Claude Plus</Text>
-        <IconButton
-          icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
-          onClick={toggleColorMode}
-          aria-label="Toggle color mode"
-        />
+        <HStack spacing={4}>
+          <IconButton
+            icon={<FaDownload />}
+            onClick={handleDownloadProjects}
+            aria-label="Download Projects"
+            title="Download Projects Folder"
+          />
+          <IconButton
+            icon={colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
+            onClick={toggleColorMode}
+            aria-label="Toggle color mode"
+          />
+        </HStack>
       </Flex>
       <Flex direction="column" flex={1} p={4} alignItems="center" bg={colorMode === 'dark' ? 'gray.800' : 'white'} color={colorMode === 'dark' ? 'white' : 'gray.800'}>
         <Box width="100%" maxWidth="1200px">

@@ -20,10 +20,12 @@ from functools import wraps
 import subprocess
 import platform
 import shutil
+import tempfile
+from starlette.background import BackgroundTask
 import uvicorn
 from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from automode_logic import AutomodeRequest, start_automode_logic
@@ -108,6 +110,7 @@ conversation_history = []
 # Global state for automode
 automode_progress = 0
 automode_messages = []
+
 
 @app.post("/automode")
 async def start_automode(request: Request):
@@ -358,6 +361,31 @@ async def chat(request: ChatRequest):
         logger.error(f"Error in chat endpoint: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.get("/download_projects")
+async def download_projects():
+    if not os.path.exists(PROJECTS_DIR):
+        raise HTTPException(status_code=404, detail="Projects directory not found")
+   
+    temp_dir = tempfile.mkdtemp()
+    try:
+        zip_filename = "projects.zip"
+        zip_path = os.path.join(temp_dir, zip_filename)
+        
+        shutil.make_archive(zip_path[:-4], 'zip', PROJECTS_DIR)
+        
+        return FileResponse(
+            path=zip_path,
+            filename=zip_filename,
+            media_type='application/zip',
+            background=BackgroundTask(cleanup, temp_dir)
+        )
+    except Exception as e:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=f"Error creating zip file: {str(e)}")
+
+def cleanup(temp_dir: str):
+    shutil.rmtree(temp_dir, ignore_errors=True)
+        
 def get_shell():
     return "cmd.exe" if platform.system() == "Windows" else "/bin/bash"
 

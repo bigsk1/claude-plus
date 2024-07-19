@@ -444,11 +444,50 @@ function App() {
       <Flex direction="column" flex={1} p={4} alignItems="center" bg={colorMode === 'dark' ? 'gray.800' : 'white'} color={colorMode === 'dark' ? 'white' : 'gray.800'}>
         <Box width="100%" maxWidth="1200px">
           <Tabs isFitted variant="enclosed" width="100%" index={activeTabIndex} onChange={(index) => setActiveTabIndex(index)}>
-            <TabList mb="1em">
-              <Tab _selected={{ color: "white", bg: "blue.500" }}>Chat</Tab>
-              <Tab _selected={{ color: "white", bg: "blue.500" }}>Files</Tab>
-              <Tab _selected={{ color: "white", bg: "blue.500" }}>Console</Tab>
-            </TabList>
+          <TabList mb="1em">
+            <Tab 
+              _selected={{ 
+                color: "white", 
+                bg: colorMode === "dark" ? "gray.700" : "blue.600",
+                fontWeight: "bold",
+              }}
+              _hover={{ 
+                bg: colorMode === "dark" ? "gray.600" : "blue.500"
+              }}
+              color={colorMode === "dark" ? "gray.300" : "gray.600"}
+              bg={colorMode === "dark" ? "gray.800" : "gray.100"}
+            >
+              Chat
+            </Tab>
+            <Tab 
+              _selected={{ 
+                color: "white", 
+                bg: colorMode === "dark" ? "gray.700" : "blue.600",
+                fontWeight: "bold",
+              }}
+              _hover={{ 
+                bg: colorMode === "dark" ? "gray.600" : "blue.500"
+              }}
+              color={colorMode === "dark" ? "gray.300" : "gray.600"}
+              bg={colorMode === "dark" ? "gray.800" : "gray.100"}
+            >
+              Files
+            </Tab>
+            <Tab 
+              _selected={{ 
+                color: "white", 
+                bg: colorMode === "dark" ? "gray.700" : "blue.600",
+                fontWeight: "bold",
+              }}
+              _hover={{ 
+                bg: colorMode === "dark" ? "gray.600" : "blue.500"
+              }}
+              color={colorMode === "dark" ? "gray.300" : "gray.600"}
+              bg={colorMode === "dark" ? "gray.800" : "gray.100"}
+            >
+              Console
+            </Tab>
+          </TabList>
             <TabPanels>
               <TabPanel>
                 <VStack spacing={4} align="stretch" width="100%">
@@ -460,7 +499,7 @@ function App() {
                         mb={2}
                         p={3}
                         borderRadius="md"
-                        bg={msg.isHtml ? 'transparent' : (msg.role === 'user' ? (colorMode === 'dark' ? 'blue.600' : 'blue.200') : (colorMode === 'dark' ? 'gray.600' : 'gray.300'))}
+                        bg={msg.isHtml ? 'transparent' : (msg.role === 'user' ? (colorMode === 'dark' ? 'gray.700' : 'gray.300') : (colorMode === 'dark' ? 'gray.600' : 'gray.300'))}
                       >
                         {msg.isHtml ? (
                           <div dangerouslySetInnerHTML={{ __html: msg.content }} />

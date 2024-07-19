@@ -19,10 +19,10 @@ const theme = extendTheme({
   components: {
     Button: {
       baseStyle: (props: StyleFunctionProps) => ({
-        bg: props.colorMode === "dark" ? "blue.600" : "blue.500",
+        bg: props.colorMode === "dark" ? "gray.700" : "gray.600", // Changed to dark grey
         color: 'white',
         _hover: {
-          bg: props.colorMode === "dark" ? "blue.500" : "blue.600",
+          bg: props.colorMode === "dark" ? "gray.600" : "gray.500", // Slightly lighter on hover
         },
       }),
     },

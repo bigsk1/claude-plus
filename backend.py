@@ -329,7 +329,7 @@ async def chat(request: ChatRequest):
         logger.info(f"Sending message to AI: {message}")
         response = anthropic_client.messages.create(
             model=CLAUDE_MODEL,
-            max_tokens=4000,  # Adjust this value if necessary
+            max_tokens=4096,  # Adjust this value if necessary
             system=system_prompt,
             messages=conversation_history,
             tools=tools

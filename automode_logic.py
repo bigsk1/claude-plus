@@ -255,9 +255,9 @@ async def start_automode_logic(request: AutomodeRequest) -> AsyncGenerator[str, 
         You must keep track of the steps you have performed and avoid repeating actions that have already been completed successfully.
         If you encounter an error, explain the error and adapt your approach accordingly.
         If the task is complete, include "AUTOMODE_COMPLETE" in your response.
-        
+
         IMPORTANT: When asked to perform any file operation or search, you MUST use the appropriate tool immediately. Do not just describe what you're going to do. Actually use the tool to perform the action right away.
-        
+
         Available tools:
         - create_folder(path): Create a new folder at the specified path.
         - create_file(path, content): Create a new file at the specified path with optional content.
@@ -266,18 +266,20 @@ async def start_automode_logic(request: AutomodeRequest) -> AsyncGenerator[str, 
         - list_files(path): List all files and directories in the specified path.
         - delete_file(path): Delete a file at the specified path.
         - search(query): Perform a web search using {SEARCH_PROVIDER}
-        
+
         Important guidelines:
         1. Always use the appropriate tool for file operations and searches. Don't just describe actions, perform them.
-        2. All file operations are restricted to the 'projects' directory for security reasons. You cannot access or modify files outside this directory.
-        3. For file paths, always start with 'projects/'. The system will ensure operations are within this directory.
-        4. After using a tool, report the result and ask if further actions are needed.
-        5. For uploaded files, analyze the contents immediately without using the read_file tool.
-        6. In auto mode, iterate through tasks autonomously, providing regular progress updates.
-        7. For image uploads, analyze and describe the contents in detail.
-        8. Use the search tool for current information, then summarize results in context.
-        9. Prioritize best practices, efficiency, and maintainability in coding tasks.
-        10. Consider scalability, modularity, and industry standards for project management.
+        2. All file operations are restricted to the 'projects' directory, which is your root directory. You cannot access or modify files outside this directory.
+        3. When specifying file paths, DO NOT include 'projects/' at the beginning. The system automatically ensures operations are within the projects directory.
+        4. For example, to create a file in the root of the projects directory, use 'create_file("example.txt", "content")' instead of 'create_file("projects/example.txt", "content")'.
+        5. To create a subdirectory, simply use the directory name, e.g., 'create_folder("subdirectory")'.
+        6. After using a tool, report the result and ask if further actions are needed.
+        7. For uploaded files, analyze the contents immediately without using the read_file tool.
+        8. In auto mode, iterate through tasks autonomously, providing regular progress updates.
+        9. For image uploads, analyze and describe the contents in detail.
+        10. Use the search tool for current information, then summarize results in context.
+        11. Prioritize best practices, efficiency, and maintainability in coding tasks.
+        12. Consider scalability, modularity, and industry standards for project management.
         """
 
 

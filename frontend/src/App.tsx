@@ -424,7 +424,7 @@ function App() {
   };
 
   return (
-    <Flex direction="column" minHeight="100vh" width="100%" className={colorMode === 'dark' ? 'dark-mode' : 'light-mode'}>
+    <Flex direction="column" minHeight="95vh" width="100%" className={colorMode === 'dark' ? 'dark-mode' : 'light-mode'}>
       <Flex as="header" width="100%" justifyContent="space-between" alignItems="center" p={4} bg={colorMode === 'dark' ? 'gray.700' : 'gray.100'}>
         <Text fontSize="2xl" fontWeight="bold">Claude Plus</Text>
         <HStack spacing={4}>
@@ -491,7 +491,7 @@ function App() {
             <TabPanels>
               <TabPanel>
                 <VStack spacing={4} align="stretch" width="100%">
-                  <Box className="chat-box" bg={colorMode === 'dark' ? 'gray.700' : 'gray.200'} borderRadius="md" p={4} height="50vh" overflowY="auto">
+                  <Box className="chat-box" bg={colorMode === 'dark' ? 'gray.700' : 'gray.200'} borderRadius="md" p={4} height="48vh" overflowY="auto">
                     {messages.map((msg, index) => (
                       <Box
                         key={index}

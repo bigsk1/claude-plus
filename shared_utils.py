@@ -16,32 +16,22 @@ import os
 import json
 import re
 import logging
+import platform
 import base64
+from typing import Dict, Any
 import requests
+import base64
+from pathlib import Path
 from PIL import Image
 import io
-from dotenv import load_dotenv
-from anthropic import Anthropic
-from config import PROJECTS_DIR, SEARCH_RESULTS_LIMIT, SEARCH_PROVIDER, SEARXNG_URL, TAVILY_API_KEY
-from tavily import TavilyClient
-from typing import Dict, Any
+from fastapi import HTTPException
+from config import PROJECTS_DIR, SEARCH_RESULTS_LIMIT, SEARCH_PROVIDER, SEARXNG_URL, tavily_client
+
 from urllib.parse import urlparse
 from datetime import datetime
 
-# Load environment variables
-load_dotenv()
 
 logger = logging.getLogger(__name__)
-
-# Initialize Anthropic client
-anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-
-tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
-
-# Initialize Tavily client if needed
-if SEARCH_PROVIDER == "TAVILY":
-    from tavily import TavilyClient
-    tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
 
 
 system_prompt = """
@@ -49,9 +39,8 @@ You are Claude, an AI assistant specializing in software development. Your key c
 1. Managing project structures in the 'projects' directory (your root directory)
 2. Writing, reading, analyzing, and modifying code
 3. Debugging and explaining complex issues
-4. Offering architectural insights and design patterns
-5. Analyzing uploaded images
-6. Performing web searches for current information using {SEARCH_PROVIDER}
+4. Analyzing uploaded images
+5. Performing web searches for current information using {SEARCH_PROVIDER}
 
 Available tools:
 1. create_folder(path): Create a new folder
@@ -64,10 +53,11 @@ Available tools:
 
 CRITICAL INSTRUCTIONS:
 1. ALWAYS complete the ENTIRE task in ONE response.
-2. Use ALL necessary tools to create folders, files, and write content WITHOUT waiting for user confirmation.
-3. DO NOT stop after creating just a folder or a single file.
-4. Provide a full implementation including HTML, CSS, and JavaScript when creating web pages.
-5. After task completion, summarize ALL actions taken and show the full project structure.
+2. ALWAYS create ALL necessary folders before creating any files.
+3. Use ALL necessary tools to create folders, files, and write content WITHOUT waiting for user confirmation.
+4. DO NOT attempt to create a file in a folder that hasn't been created yet.
+5. Provide a full implementation including all necessary files and their content in ONE response.
+6. After task completion, summarize ALL actions taken and show the full project structure.
 
 File Operation Guidelines:
 1. The 'projects' directory is your root directory. All file operations occur within this directory.
@@ -75,22 +65,41 @@ File Operation Guidelines:
 3. To create a file in the root of the projects directory, use 'create_file("example.txt", "content")'.
 4. To create a file in a subdirectory, use the format 'create_file("subdirectory/example.txt", "content")'.
 5. To create a new folder, simply use 'create_folder("new_folder_name")'.
-6. If asked to make an app or game, create a new folder for it and add all necessary files inside that folder.
+6. If asked to make an app or game, create a new folder for it and add all necessary files inside that folder in ONE response.
 
 Example usage:
 create_folder("simple_game")
 create_file("simple_game/game.py", "# Simple Python Game\n\nimport random\n\n# Game code here...")
 
-Example of COMPLETE task execution:
-User: "Create a landing page with email signup and dark mode"
-Your response MUST:
-1. Create a folder for the project
-2. Create ALL necessary files (HTML, CSS, JS)
-3. Write FULL content for each file
-4. Implement the requested features (email signup, dark mode)
-5. Provide a summary of the created project structure and functionality
+STRUCTURED PROJECT CREATION APPROACH:
+1. Create the main project folder:
+   create_folder("project_name")
 
-Remember: NEVER stop after just creating a folder or a single file. ALWAYS complete the ENTIRE task.
+2. Create all necessary subdirectories:
+   create_folder("project_name/subdirectory1")
+   create_folder("project_name/subdirectory2")
+   ... (create all required subdirectories)
+
+3. Create all necessary files:
+   create_file("project_name/file1.ext", "content")
+   create_file("project_name/subdirectory1/file2.ext", "content")
+   ... (create all required files)
+
+4. Write content to each file as needed:
+   write_to_file("project_name/file1.ext", "updated content")
+   ... (write to all files that need content)
+
+5. Provide a summary of the created project structure and functionality.
+
+Remember: NEVER stop after just creating a folder or a single file. ALWAYS complete the ENTIRE task in ONE response.
+
+IMPORTANT: When performing file operations:
+1. Always use the appropriate tool to perform the action.
+2. After each file operation, verify the result by:
+   a. For file creation or modification, use the read_file tool to confirm the content.
+   b. Use the list_files tool to confirm the file's presence in the directory.
+3. If a file operation seems to fail or produce unexpected results, report this to the user immediately.
+4. Keep track of the current state of the project directory and files you've created or modified.
 
 After completing a task:
 1. Report all actions taken and their results
@@ -103,27 +112,50 @@ Additional Guidelines:
 3. For uploaded files, analyze the contents immediately without using the read_file tool.
 4. For image uploads, analyze and describe the contents in detail.
 5. Use the search tool for current information, then summarize results in context.
-6. Prioritize best practices, efficiency, and maintainability in coding tasks.
-7. Consider scalability, modularity, and industry standards for project management.
 
 Always tailor your responses to the user's specific needs and context, focusing on providing accurate, helpful, and detailed assistance in software development and project management.
 """
 
+
+def get_safe_path(path: str) -> Path:
+    abs_projects_dir = Path(PROJECTS_DIR).resolve()
+    # Remove leading slash and normalize path
+    normalized_path = Path(path.lstrip('/')).as_posix()
+    full_path = (abs_projects_dir / normalized_path).resolve()
+    if not full_path.is_relative_to(abs_projects_dir):
+        raise ValueError(f"Access to path outside of projects directory is not allowed: {path}")
+    return full_path
+def sync_filesystem():
+    try:
+        if hasattr(os, 'sync'):
+            os.sync()
+        elif platform.system() == 'Windows':
+            import ctypes
+            ctypes.windll.kernel32.FlushFileBuffers(ctypes.c_void_p(-1))
+        logger.info("File system synced")
+    except Exception as e:
+        logger.error(f"Error syncing file system: {str(e)}", exc_info=True)
+
 def encode_image_to_base64(image_data):
     try:
         logger.debug(f"Encoding image, data type: {type(image_data)}")
+        
+        # Open the image
         if isinstance(image_data, str):  # If it's a file path
             logger.debug("Image data is a file path")
-            with Image.open(image_data) as img:
-                img_byte_arr = io.BytesIO()
-                img.save(img_byte_arr, format='PNG')
-                encoded = base64.b64encode(img_byte_arr.getvalue()).decode('utf-8')
+            img = Image.open(image_data)
         else:  # If it's binary data
             logger.debug("Image data is binary")
             img = Image.open(io.BytesIO(image_data))
-            img_byte_arr = io.BytesIO()
-            img.save(img_byte_arr, format='PNG')
-            encoded = base64.b64encode(img_byte_arr.getvalue()).decode('utf-8')
+        
+        # Convert to RGB if it's not already (handles RGBA, CMYK, etc.)
+        if img.mode not in ('RGB', 'L'):
+            img = img.convert('RGB')
+        
+        # Save as JPEG
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format='JPEG', quality=85)
+        encoded = base64.b64encode(img_byte_arr.getvalue()).decode('utf-8')
         
         logger.debug(f"Image encoded successfully, length: {len(encoded)}")
         return encoded
@@ -223,157 +255,93 @@ def tavily_search(query: str) -> str:
         logger.error(f"Error performing Tavily search: {str(e)}", exc_info=True)
         return f"Error performing Tavily search: {str(e)}"
 
-# Ai can make folders
-def create_folder(path):
+def create_folder(path: str) -> str:
     try:
-        if not os.path.exists(path):
-            os.makedirs(path)
-        return f"Folder created: {path}"
-    except Exception as e:
-        logger.error(f"Error creating folder: {str(e)}", exc_info=True)
-        return f"Error creating folder: {str(e)}"
-
-
-# Webui creating a folder
-def create_folder_frontend(path):
-    try:
-        full_path = os.path.normpath(os.path.join(PROJECTS_DIR, path))
-        if not os.path.exists(full_path):
-            os.makedirs(full_path)
+        full_path = get_safe_path(path)
+        full_path.mkdir(parents=True, exist_ok=True)
+        sync_filesystem()
+        if not full_path.exists():
+            raise FileNotFoundError(f"Failed to create folder: {full_path}")
+        logger.info(f"Folder created and verified: {full_path}")
         return f"Folder created: {full_path}"
     except Exception as e:
-        return f"Error creating folder: {str(e)}"
-    
-# AI can create files
-def create_file(path, content=""):
-    try:
-        with open(path, 'w') as f:
-            f.write(content)
-        return f"File created: {path}"
-    except Exception as e:
-        return f"Error creating file: {str(e)}"
+        logger.error(f"Error creating folder: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error creating folder: {str(e)}")
 
-# creating files in webui
-def create_file_frontend(path, content=""):
+def create_file(path: str, content: str = "") -> str:
     try:
-        full_path = os.path.normpath(os.path.join(PROJECTS_DIR, path))
-        with open(full_path, 'w') as f:
-            f.write(content)
+        full_path = get_safe_path(path)
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        full_path.write_text(content)
+        sync_filesystem()
+        if not full_path.exists():
+            raise FileNotFoundError(f"Failed to create file: {full_path}")
+        logger.info(f"File created and verified: {full_path}")
         return f"File created: {full_path}"
     except Exception as e:
-        logger.error(f"Error creating file: {str(e)}")
-        return f"Error creating file: {str(e)}"
+        logger.error(f"Error creating file: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error creating file: {str(e)}")
 
-# AI can write to files
-def write_to_file(path, content):
+def write_to_file(path: str, content: str) -> str:
     try:
-        with open(path, 'w') as f:
+        full_path = get_safe_path(path)
+        logger.debug(f"Full path for writing: {full_path}")
+        with open(full_path, 'w', encoding='utf-8') as f:
             f.write(content)
-        return f"Content written to file: {path}"
-    except Exception as e:
-        logger.error(f"Error writing to file: {str(e)}", exc_info=True)
-        return f"Error writing to file: {str(e)}"
-
-# Write and save files in UI
-def write_to_file_frontend(path, content):
-    try:
-        full_path = os.path.normpath(os.path.join(PROJECTS_DIR, path))
-        with open(full_path, 'w') as f:
-            f.write(content)
+        sync_filesystem()
+        if not os.path.exists(full_path):
+            raise FileNotFoundError(f"Failed to write to file: {full_path}")
+        logger.info(f"Content written to file and verified: {full_path}")
         return f"Content written to file: {full_path}"
     except Exception as e:
-        return f"Error writing to file: {str(e)}"
+        logger.error(f"Error writing to file: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error writing to file: {str(e)}")
 
 
-# AI can read files/folder
-def read_file(path):
+def read_file(path: str) -> str:
     try:
-        if not os.path.isfile(path):
-            return f"Error: File not found at path {path}"
-        with open(path, 'r') as f:
+        full_path = get_safe_path(path)
+        if not os.path.isfile(full_path):
+            logger.error(f"File not found: {full_path}")
+            return f"File not found: {path}"
+        with open(full_path, 'r') as f:
             content = f.read()
-        if not content:
-            return "The file is empty."
+        logger.info(f"File read successfully: {full_path}")
         return content
     except Exception as e:
         logger.error(f"Error reading file: {str(e)}", exc_info=True)
         return f"Error reading file: {str(e)}"
 
-# You can read files and folders in webui
-def read_file_frontend(path):
+def list_files(path: str = ".") -> list:
     try:
-        full_path = os.path.normpath(os.path.join(PROJECTS_DIR, path))
-        logger.debug(f"Attempting to read file at path: {full_path}")
-        if not os.path.exists(full_path):
-            logger.error(f"File does not exist: {full_path}")
-            return f"Error: File does not exist at path {full_path}"
-        if not os.path.isfile(full_path):
-            logger.error(f"Path is not a file: {full_path}")
-            return f"Error: Path is not a file {full_path}"
-        with open(full_path, 'r') as f:
-            content = f.read()
-        logger.debug(f"Successfully read file: {full_path}")
-        return content
+        full_path = get_safe_path(path)
+        files = []
+        for item in full_path.iterdir():
+            relative_path = item.relative_to(Path(PROJECTS_DIR))
+            files.append({
+                "name": item.name,
+                "isDirectory": item.is_dir(),
+                "size": item.stat().st_size if item.is_file() else "-",
+                "modifiedDate": datetime.fromtimestamp(item.stat().st_mtime).strftime('%m-%d %H:%M')
+            })
+        logger.info(f"Listed files in {full_path}")
+        return files
     except Exception as e:
-        logger.error(f"Error reading file: {str(e)}")
-        return f"Error reading file: {str(e)}"
-
-
-# AI can list files
-def list_files(path="."):
+        logger.error(f"Error listing files: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error listing files: {str(e)}")
+    
+def delete_file(path: str) -> str:
     try:
-        files = os.listdir(path)
-        return "\n".join(files)
-    except Exception as e:
-        return f"Error listing files: {str(e)}"
-
-# webui you can list files
-def list_files_frontend(path="."):
-    try:
-        full_path = os.path.normpath(os.path.join(PROJECTS_DIR, path))
-        logger.debug(f"list_files: original_path={path}, full_path={full_path}")
-        files_and_dirs = os.listdir(full_path)
-        return [
-            {
-                "name": f,
-                "isDirectory": os.path.isdir(os.path.join(full_path, f)),
-                "size": os.path.getsize(os.path.join(full_path, f)) if not os.path.isdir(os.path.join(full_path, f)) else "-",
-                "modifiedDate": datetime.fromtimestamp(os.path.getmtime(os.path.join(full_path, f))).strftime('%Y-%m-%d %H:%M:%S')
-            } for f in files_and_dirs
-        ]
-    except Exception as e:
-        logger.error(f"Error listing files: {str(e)}")
-        return []
-
-# Ai can delete files and folder
-def delete_file(path):
-    try:
-        if os.path.isdir(path):
-            os.rmdir(path)
+        full_path = get_safe_path(path)
+        if full_path.is_file():
+            full_path.unlink()
+        elif full_path.is_dir():
+            full_path.rmdir()
         else:
-            os.remove(path)
-        return f"Deleted: {path}"
-    except Exception as e:
-        return f"Error deleting file: {str(e)}"
-
-# to delete file and folder in webui
-def delete_file_frontend(path):
-    try:
-        full_path = os.path.normpath(os.path.join(PROJECTS_DIR, path))
-        if os.path.isdir(full_path):
-            os.rmdir(full_path)
-        else:
-            os.remove(full_path)
+            raise FileNotFoundError(f"File or directory not found: {full_path}")
+        logger.info(f"Deleted: {full_path}")
+        sync_filesystem()
         return f"Deleted: {full_path}"
     except Exception as e:
-        logger.error(f"Error deleting file: {str(e)}")
-        return f"Error deleting file: {str(e)}"
-
-
-# def update_system_prompt(current_iteration=None, max_iterations=None):
-#     global system_prompt
-#     automode_status = "You are currently in automode." if automode else "You are not in automode."
-#     iteration_info = ""
-#     if current_iteration is not None and max_iterations is not None:
-#         iteration_info = f"You are currently on iteration {current_iteration} out of {max_iterations} in automode."
-#     return system_prompt.format(automode_status=automode_status, iteration_info=iteration_info)
+        logger.error(f"Error deleting file: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")

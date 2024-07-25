@@ -16,21 +16,14 @@ import os
 import json
 import logging
 from typing import AsyncGenerator
-from anthropic import Anthropic
 from pydantic import BaseModel
 from fastapi import HTTPException
-from config import PROJECTS_DIR, CLAUDE_MODEL
+from config import PROJECTS_DIR, CLAUDE_MODEL, anthropic_client
 
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-# Initialize Anthropic client
-anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-
-#CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20240620")
-#PROJECTS_DIR = "projects"
 
 SEARCH_PROVIDER = os.getenv("SEARCH_PROVIDER", "SEARXNG")
 
@@ -43,18 +36,17 @@ class AutomodeRequest(BaseModel):
 
 def create_folder(path):
     try:
-        if not os.path.exists(path):
-            os.makedirs(path)
-        return f"Folder created: {path}"
+        full_path = os.path.join(PROJECTS_DIR, path)
+        os.makedirs(full_path, exist_ok=True)
+        return f"Folder created: {full_path}"
     except Exception as e:
         logger.error(f"Error creating folder: {str(e)}", exc_info=True)
         return f"Error creating folder: {str(e)}"
 
 def create_file(path: str, content: str = "") -> str:
     try:
-        full_path = os.path.join(path)
-        if not os.path.exists(os.path.dirname(full_path)):
-            os.makedirs(os.path.dirname(full_path))
+        full_path = os.path.join(PROJECTS_DIR, path)
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
         with open(full_path, 'w') as file:
             file.write(content)
         return f"File created: {full_path}"

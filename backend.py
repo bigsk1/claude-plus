@@ -29,15 +29,14 @@ from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from automode_logic import AutomodeRequest, start_automode_logic
-from config import PROJECTS_DIR, UPLOADS_DIR, SEARCH_PROVIDER, CLAUDE_MODEL
+from config import PROJECTS_DIR, UPLOADS_DIR, SEARCH_PROVIDER, CLAUDE_MODEL, anthropic_client
 from shared_utils import (
-    anthropic_client, system_prompt,
-    perform_search, encode_image_to_base64, create_folder, create_file,
-    read_file, list_files, list_files_frontend, delete_file, read_file_frontend, delete_file_frontend, create_file_frontend,
-    write_to_file_frontend, create_folder_frontend, write_to_file
+    system_prompt, perform_search, encode_image_to_base64, create_folder, create_file,
+    read_file, list_files, delete_file, write_to_file
 )
 
 load_dotenv()
+
 
 app = FastAPI()
 
@@ -152,62 +151,56 @@ def safe_path_operation(func: Callable):
 async def create_project(request: ProjectRequest, path: str):
     try:
         project_name = f"{request.template.lower()}_project"
-        project_path = os.path.join(PROJECTS_DIR, path, project_name)
+        project_path = os.path.join(PROJECTS_DIR, path, project_name).replace('\\', '/')
         os.makedirs(project_path, exist_ok=True)
         
         if request.template == "react":
-            create_file(os.path.join(project_path, "package.json"), '{"name": "react-app", "version": "1.0.0"}')
-            create_file(os.path.join(project_path, "src/App.js"), 'import React from "react";\n\nfunction App() {\n  return <div>Hello, React!</div>;\n}\n\nexport default App;')
+            create_file(os.path.join(project_path, "package.json").replace('\\', '/'), '{"name": "react-app", "version": "1.0.0"}')
+            create_file(os.path.join(project_path, "src/App.js").replace('\\', '/'), 'import React from "react";\n\nfunction App() {\n  return <div>Hello, React!</div>;\n}\n\nexport default App;')
         elif request.template == "node":
-            create_file(os.path.join(project_path, "package.json"), '{"name": "node-app", "version": "1.0.0"}')
-            create_file(os.path.join(project_path, "index.js"), 'console.log("Hello, Node.js!");')
+            create_file(os.path.join(project_path, "package.json").replace('\\', '/'), '{"name": "node-app", "version": "1.0.0"}')
+            create_file(os.path.join(project_path, "index.js").replace('\\', '/'), 'console.log("Hello, Node.js!");')
         elif request.template == "python":
-            create_file(os.path.join(project_path, "main.py"), 'print("Hello, Python!")')
-            create_file(os.path.join(project_path, "requirements.txt"), '')
+            create_file(os.path.join(project_path, "main.py").replace('\\', '/'), 'print("Hello, Python!")')
+            create_file(os.path.join(project_path, "requirements.txt").replace('\\', '/'), '')
         else:
             raise ValueError(f"Unknown project template: {request.template}")
         
-        return {"message": f"{request.template} project created successfully at {os.path.relpath(project_path, PROJECTS_DIR)}"}
+        return {"message": f"{request.template} project created successfully at {os.path.relpath(project_path, PROJECTS_DIR).replace('\\', '/')}"}
     except Exception as e:
         logger.error(f"Error creating project: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error creating project: {str(e)}")
 
 
-@app.get("/list_files")
-@safe_path_operation
-async def get_file_list(path: str = Query(...)):
-    logger.debug(f"Received path: {path}")
-    files = list_files_frontend(path)
-    if not files and path:
-        raise HTTPException(status_code=404, detail="Directory not found")
-    return {"files": files, "currentDirectory": path}
-
-
 @app.post("/create_folder")
-@safe_path_operation
 async def create_folder_endpoint(path: str = Query(...)):
-    result = create_folder_frontend(path)
-    if "Error" in result:
-        raise HTTPException(status_code=500, detail=result)
-    return {"message": result}
+    try:
+        result = create_folder(path)
+        logger.info(f"Folder created: {path}")
+        return {"message": result}
+    except Exception as e:
+        logger.error(f"Error creating folder: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/create_file")
-@safe_path_operation
 async def create_file_endpoint(path: str = Query(...), content: str = ""):
-    logger.debug(f"Received path: {path}")
-    result = create_file_frontend(path, content)
-    if "Error" in result:
-        raise HTTPException(status_code=500, detail=result)
-    return {"message": result}
+    try:
+        result = create_file(path, content)
+        logger.info(f"File created: {path}")
+        return {"message": result}
+    except Exception as e:
+        logger.error(f"Error creating file: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/read_file")
-#@safe_path_operation
 async def read_file_endpoint(path: str = Query(...)):
-    logger.debug(f"Received path: {path}")
-    content = read_file_frontend(path)
-    if "Error" in content:
-        raise HTTPException(status_code=404, detail=content)
-    return {"content": content}
+    try:
+        content = read_file(path)
+        logger.info(f"File read: {path}")
+        return {"content": content}
+    except Exception as e:
+        logger.error(f"Error reading file: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=404, detail=str(e))
 
 @app.post("/write_file")
 async def write_file_endpoint(request: Request, path: str = Query(...)):
@@ -224,7 +217,8 @@ async def write_file_endpoint(request: Request, path: str = Query(...)):
         if not content:
             raise HTTPException(status_code=422, detail="Content is required")
 
-        result = write_to_file_frontend(path, content)
+        logger.debug(f"Path: {path}, Content: {content}")
+        result = write_to_file(path, content)
         if "Error" in result:
             raise HTTPException(status_code=500, detail=result)
         return JSONResponse(content={"message": result})
@@ -232,14 +226,27 @@ async def write_file_endpoint(request: Request, path: str = Query(...)):
         logger.error(f"Error in write_file_endpoint: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+
+
+@app.get("/list_files")
+async def list_files_endpoint(path: str = Query(".")):
+    try:
+        files = list_files(path)
+        return {"files": files, "currentDirectory": path}
+    except Exception as e:
+        logger.error(f"Error listing files: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/delete_file")
-@safe_path_operation
 async def delete_file_endpoint(path: str = Query(...)):
-    logger.debug(f"Received path: {path}")
-    result = delete_file_frontend(path)
-    if "Error" in result:
-        raise HTTPException(status_code=404, detail=result)
-    return {"message": result}
+    try:
+        result = delete_file(path)
+        logger.info(f"File deleted: {path}")
+        return {"message": result}
+    except Exception as e:
+        logger.error(f"Error deleting file: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
@@ -267,17 +274,18 @@ async def analyze_image(file: UploadFile = File(...)):
         logger.debug(f"Received file: {file.filename}, content_type: {file.content_type}")
         contents = await file.read()
         logger.debug(f"File contents read, length: {len(contents)} bytes")
-        
+
         encoded_image = encode_image_to_base64(contents)
-        logger.debug(f"Image encoded, length: {len(encoded_image)}")
         
         if encoded_image.startswith("Error encoding image:"):
             raise ValueError(encoded_image)
-        
+
+        logger.debug(f"Image encoded, length: {len(encoded_image)}")
+
         analysis_result = anthropic_client.messages.create(
             model=CLAUDE_MODEL,
             max_tokens=1000,
-            system=system_prompt,  # Use system parameter instead of including it in messages
+            system=system_prompt,
             messages=[
                 {
                     "role": "user", 
@@ -286,7 +294,7 @@ async def analyze_image(file: UploadFile = File(...)):
                             "type": "image",
                             "source": {
                                 "type": "base64",
-                                "media_type": file.content_type,
+                                "media_type": "image/jpeg",
                                 "data": encoded_image
                             }
                         },
@@ -321,7 +329,7 @@ async def search(query: SearchQuery):
 # Chat endpoint
 @app.post("/chat")
 async def chat(request: ChatRequest):
-    global conversation_history  #automode
+    global conversation_history
     try:
         message = request.message
         conversation_history.append({"role": "user", "content": message})
@@ -329,7 +337,7 @@ async def chat(request: ChatRequest):
         logger.info(f"Sending message to AI: {message}")
         response = anthropic_client.messages.create(
             model=CLAUDE_MODEL,
-            max_tokens=4096,  # Adjust this value if necessary
+            max_tokens=4096,
             system=system_prompt,
             messages=conversation_history,
             tools=tools
@@ -347,13 +355,11 @@ async def chat(request: ChatRequest):
                 tool_input = content.input
                 logger.info(f"Tool used: {tool_name}, Input: {tool_input}")
                 tool_result = execute_tool(tool_name, tool_input)
-                response_content += f"\nTool used: {tool_name}\nTool result: {tool_result}\n"
+                if tool_result['success']:
+                    response_content += f"\nTool used: {tool_name}\nTool result: {tool_result['result']}\n"
+                else:
+                    response_content += f"\nTool used: {tool_name}\nTool error: {tool_result['error']}\n"
                 logger.info(f"Tool result: {tool_result}")
-                # Add a follow-up message based on the tool used
-                if tool_name == "read_file" and "The file is empty." in tool_result:
-                    response_content += "\nIt seems the file is empty. Would you like to add some content to it?"
-                elif tool_name == "write_to_file":
-                    response_content += "\nI have successfully written the content to the file. Is there anything else you would like to do?"
 
         conversation_history.append({"role": "assistant", "content": response_content})
         return {"response": response_content}
@@ -361,6 +367,7 @@ async def chat(request: ChatRequest):
         logger.error(f"Error in chat endpoint: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+    
 @api_router.get("/download_projects")
 async def download_projects():
     if not os.path.exists(PROJECTS_DIR):
@@ -621,6 +628,7 @@ tools = [
 def execute_tool(tool_name, tool_input):
     try:
         logger.debug(f"Executing tool: {tool_name} with input: {tool_input}")
+        result = None
         if tool_name == "create_folder":
             result = create_folder(tool_input["path"])
         elif tool_name == "create_file":
@@ -629,6 +637,8 @@ def execute_tool(tool_name, tool_input):
             result = write_to_file(tool_input["path"], tool_input["content"])
         elif tool_name == "read_file":
             result = read_file(tool_input["path"])
+            if result.startswith("File not found:") or result.startswith("Error reading file:"):
+                return {"success": False, "error": result}
         elif tool_name == "list_files":
             result = list_files(tool_input["path"])
         elif tool_name == "delete_file":
@@ -636,12 +646,13 @@ def execute_tool(tool_name, tool_input):
         elif tool_name == "search":
             result = perform_search(tool_input["query"])
         else:
-            result = f"Unknown tool: {tool_name}"
+            return {"success": False, "error": f"Unknown tool: {tool_name}"}
+        
         logger.debug(f"Tool result: {result}")
-        return result
+        return {"success": True, "result": result}
     except Exception as e:
         logger.error(f"Error executing tool {tool_name}: {str(e)}", exc_info=True)
-        return f"Error executing tool {tool_name}: {str(e)}"
+        return {"success": False, "error": f"Error executing tool {tool_name}: {str(e)}"}
 
 
 if __name__ == "__main__":

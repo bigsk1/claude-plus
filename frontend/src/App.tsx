@@ -223,9 +223,19 @@ function App() {
     try {
       const response = await axios.get(`${API_URL}/list_files`, { params: { path } });
       setFiles(response.data.files || []);
-      setCurrentDirectory(response.data.currentDirectory || '');
+      setCurrentDirectory(path);
     } catch (error) {
       console.error('Error listing files:', error);
+      if (axios.isAxiosError(error) && error.response) {
+        console.error('Server error:', error.response.data);
+        toast({
+          title: "Error listing files",
+          description: "There was a problem loading the file list. Please try again.",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
+      }
       setFiles([]);
     }
   };
@@ -256,13 +266,23 @@ function App() {
 
   const readFile = async (fileName: string) => {
     try {
-      const response = await axios.get(`${API_URL}/read_file`, { params: { path: `${currentDirectory}/${fileName}` } });
+      const filePath = currentDirectory === '/' 
+        ? `/${fileName}` 
+        : `${currentDirectory}/${fileName}`;
+      const response = await axios.get(`${API_URL}/read_file`, { params: { path: filePath } });
       setSelectedFile(fileName);
       setFileContent(response.data.content);
       setOriginalContent(response.data.content);
       onOpen();
     } catch (error) {
       console.error('Error reading file:', error);
+      toast({
+        title: "Error reading file",
+        description: "There was a problem reading the file. Please try again.",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
     }
   };
 
@@ -276,6 +296,7 @@ function App() {
         }
       });
       alert(response.data.message);  // Show a confirmation message
+      console.log('Saving content:', fileContent);
       onClose();
       listFiles(currentDirectory);
     } catch (error) {
@@ -308,7 +329,18 @@ function App() {
 
   const handleFileClick = (file: FileItem) => {
     if (file.isDirectory) {
-      navigateDirectory(file.name);
+      let newPath;
+      if (file.name === '..') {
+        const pathParts = currentDirectory.split('/').filter(Boolean);
+        pathParts.pop();
+        newPath = pathParts.length ? '/' + pathParts.join('/') : '/';
+      } else {
+        newPath = currentDirectory === '/' 
+          ? `/${file.name}` 
+          : `${currentDirectory}/${file.name}`;
+      }
+      setCurrentDirectory(newPath);
+      listFiles(newPath);
     } else {
       readFile(file.name);
     }
@@ -318,15 +350,6 @@ function App() {
     setSelectedFile(prevSelected => prevSelected === fileName ? null : fileName);
   };
 
-  const navigateDirectory = (dirName: string) => {
-    if (dirName === '..') {
-      const parentDir = currentDirectory.split('/').slice(0, -1).join('/');
-      setCurrentDirectory(parentDir || '.');
-    } else {
-      setCurrentDirectory(prevDir => prevDir === '.' ? dirName : `${prevDir}/${dirName}`);
-    }
-    listFiles(dirName === '..' ? currentDirectory.split('/').slice(0, -1).join('/') || '.' : `${currentDirectory}/${dirName}`);
-  };
 
   const createProjectTemplate = async (templateName: string) => {
     try {
@@ -350,8 +373,9 @@ function App() {
   const viewSetupInstructions = async (fileName: string) => {
     setIsLoading(true);
     try {
+      const filePath = currentDirectory === '.' ? fileName : `${currentDirectory}/${fileName}`;
       const response = await axios.post(`${API_URL}/chat`, {
-        message: `The file ${fileName} is located in the directory ${currentDirectory}. Please read this file, then provide detailed information about the file contents for the project containing this file. Include any necessary steps for installing dependencies and executing the code.`
+        message: `The file ${filePath} is located in the projects directory. Please read this file, then provide detailed information about the file contents for the project containing this file. Include any necessary steps for installing dependencies and executing the code.`
       });
       setMessages(prev => [...prev, { role: 'assistant', content: `Claude: ${response.data.response}` }]);
       setActiveTabIndex(0); // Switch to the chat tab

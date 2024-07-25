@@ -50,7 +50,7 @@ function FileListing({ files, onFileClick, currentDirectory, selectedFile, onSel
   );
 
   const ParentDirectoryItem = () => {
-    const parentDirFile: FileItem = { name: '..', isDirectory: true };
+    const parentDirFile: FileItem = { name: '..', isDirectory: true, size: '-', modifiedDate: '' };
     return viewMode === 'list' ? (
       <ListViewItem file={parentDirFile} />
     ) : (
@@ -82,7 +82,7 @@ function FileListing({ files, onFileClick, currentDirectory, selectedFile, onSel
   return (
     <Box>
       <Flex justifyContent="space-between" alignItems="center" mb={4}>
-        <Text fontWeight="bold">Current Directory: {currentDirectory}</Text>
+        <Text fontWeight="bold">Current Directory: {currentDirectory === '.' ? 'Root' : currentDirectory}</Text>
         <Flex alignItems="center">
           <IconButton
             aria-label="Toggle view"

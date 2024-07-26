@@ -69,7 +69,9 @@ This application leverages the power of Claude to enhance your development workf
 
    TAVILY_API_KEY=your_tavily_api_key  # If using Tavily 
 
-   SEARXNG_URL=your_searxng_url  # If using SearXNG
+   SEARXNG_URL=http://192.168.1.10:4000  # If using SearXNG
+
+   SEARXNG_RESULTS=5  # number of returned search results
 
    MAX_ITERATIONS=5  # Number of automode iterations
    ```

@@ -16,11 +16,13 @@ import os
 import logging
 from typing import Optional, Callable, List
 from contextlib import asynccontextmanager
-from functools import wraps
+# from functools import wraps
 import subprocess
 import platform
 import shutil
 import tempfile
+import asyncio
+from functools import partial
 from starlette.background import BackgroundTask
 import uvicorn
 from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Request, Query
@@ -29,7 +31,8 @@ from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from automode_logic import AutomodeRequest, start_automode_logic
-from config import PROJECTS_DIR, UPLOADS_DIR, SEARCH_PROVIDER, CLAUDE_MODEL, anthropic_client
+from tools import tools, execute_tool
+from config import PROJECTS_DIR, UPLOADS_DIR, CLAUDE_MODEL, anthropic_client
 from shared_utils import (
     system_prompt, perform_search, encode_image_to_base64, create_folder, create_file,
     read_file, list_files, delete_file, write_to_file
@@ -126,28 +129,27 @@ async def get_automode_status():
     return {"progress": automode_progress, "messages": automode_messages}
 
 
-def is_safe_path(path: str) -> bool:
-    abs_projects_dir = os.path.abspath(PROJECTS_DIR)
-    abs_path = os.path.abspath(os.path.join(PROJECTS_DIR, path))
-    return os.path.commonpath([abs_projects_dir, abs_path]) == abs_projects_dir
+# def is_safe_path(path: str) -> bool:
+#     abs_projects_dir = os.path.abspath(PROJECTS_DIR)
+#     abs_path = os.path.abspath(os.path.join(PROJECTS_DIR, path))
+#     return os.path.commonpath([abs_projects_dir, abs_path]) == abs_projects_dir
 
-def safe_path_operation(func: Callable):
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        path = kwargs.get('path', '.')
-        full_path = os.path.abspath(os.path.join(PROJECTS_DIR, path))
-        print(f"[DEBUG] safe_path_operation: original_path={path}, full_path={full_path}")
-        if not full_path.startswith(PROJECTS_DIR):
-            raise HTTPException(status_code=403, detail="Access to this directory is not allowed")
+# def safe_path_operation(func: Callable):
+#     @wraps(func)
+#     async def wrapper(*args, **kwargs):
+#         path = kwargs.get('path', '.')
+#         full_path = os.path.abspath(os.path.join(PROJECTS_DIR, path))
+#         print(f"[DEBUG] safe_path_operation: original_path={path}, full_path={full_path}")
+#         if not full_path.startswith(PROJECTS_DIR):
+#             raise HTTPException(status_code=403, detail="Access to this directory is not allowed")
         
-        kwargs['path'] = os.path.relpath(full_path, PROJECTS_DIR)
-        print(f"[DEBUG] safe_path_operation: adjusted_path={kwargs['path']}")
-        return await func(*args, **kwargs)
-    return wrapper
+#         kwargs['path'] = os.path.relpath(full_path, PROJECTS_DIR)
+#         print(f"[DEBUG] safe_path_operation: adjusted_path={kwargs['path']}")
+#         return await func(*args, **kwargs)
+#     return wrapper
 
 
 @app.post("/create_project")
-@safe_path_operation
 async def create_project(request: ProjectRequest, path: str):
     try:
         project_name = f"{request.template.lower()}_project"
@@ -225,8 +227,6 @@ async def write_file_endpoint(request: Request, path: str = Query(...)):
     except Exception as e:
         logger.error(f"Error in write_file_endpoint: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Server Error")
-
-
 
 @app.get("/list_files")
 async def list_files_endpoint(path: str = Query(".")):
@@ -531,129 +531,6 @@ async def pip_install(request: CommandRequest):
 
 
 app.include_router(api_router, prefix="/api")
-
-tools = [
-    {
-        "name": "create_folder",
-        "description": "Create a new folder at the specified path.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "The path where the folder should be created"}
-            },
-            "required": ["path"]
-        }
-    },
-    {
-        "name": "create_file",
-        "description": "Create a new file at the specified path with optional content.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "The path where the file should be created"},
-                "content": {"type": "string", "description": "The initial content of the file (optional)"}
-            },
-            "required": ["path"]
-        }
-    },
-    {
-        "name": "write_to_file",
-        "description": "Write content to a file at the specified path.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "The path of the file to write to"},
-                "content": {"type": "string", "description": "The full content to write to the file"}
-            },
-            "required": ["path", "content"]
-        }
-    },
-    {
-        "name": "read_file",
-        "description": "Read the contents of a file at the specified path.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "The path of the file to read"}
-            },
-            "required": ["path"]
-        }
-    },
-    {
-        "name": "list_files",
-        "description": "List all files and directories in the specified path.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "The path of the folder to list"}
-            },
-            "required": ["path"]
-        }
-    },
-    {
-        "name": "delete_file",
-        "description": "Delete a file at the specified path.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string", "description": "The path of the file to delete"}
-            },
-            "required": ["path"]
-        }
-    },
-    {
-        "name": "search",
-        "description": f"Perform a web search using the {SEARCH_PROVIDER} search provider.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "The search query"}
-            },
-            "required": ["query"]
-        }
-    },
-    {
-        "name": "upload_file",
-        "description": "Upload a file to the specified path.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "file": {"type": "string", "description": "The file to upload (base64 encoded)"}
-            },
-            "required": ["file"]
-        }
-    }
-]
-
-def execute_tool(tool_name, tool_input):
-    try:
-        logger.debug(f"Executing tool: {tool_name} with input: {tool_input}")
-        result = None
-        if tool_name == "create_folder":
-            result = create_folder(tool_input["path"])
-        elif tool_name == "create_file":
-            result = create_file(tool_input["path"], tool_input.get("content", ""))
-        elif tool_name == "write_to_file":
-            result = write_to_file(tool_input["path"], tool_input["content"])
-        elif tool_name == "read_file":
-            result = read_file(tool_input["path"])
-            if result.startswith("File not found:") or result.startswith("Error reading file:"):
-                return {"success": False, "error": result}
-        elif tool_name == "list_files":
-            result = list_files(tool_input["path"])
-        elif tool_name == "delete_file":
-            result = delete_file(tool_input["path"])
-        elif tool_name == "search":
-            result = perform_search(tool_input["query"])
-        else:
-            return {"success": False, "error": f"Unknown tool: {tool_name}"}
-        
-        logger.debug(f"Tool result: {result}")
-        return {"success": True, "result": result}
-    except Exception as e:
-        logger.error(f"Error executing tool {tool_name}: {str(e)}", exc_info=True)
-        return {"success": False, "error": f"Error executing tool {tool_name}: {str(e)}"}
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

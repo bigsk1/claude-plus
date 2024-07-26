@@ -26,7 +26,6 @@ from PIL import Image
 import io
 from fastapi import HTTPException
 from config import PROJECTS_DIR, SEARCH_RESULTS_LIMIT, SEARCH_PROVIDER, SEARXNG_URL, tavily_client
-
 from urllib.parse import urlparse
 from datetime import datetime
 

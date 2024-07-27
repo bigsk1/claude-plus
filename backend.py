@@ -21,6 +21,7 @@ import subprocess
 import platform
 import shutil
 import tempfile
+from pathlib import Path
 from starlette.background import BackgroundTask
 import uvicorn
 from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Request, Query
@@ -33,7 +34,7 @@ from tools import tools, execute_tool
 from config import PROJECTS_DIR, UPLOADS_DIR, CLAUDE_MODEL, anthropic_client
 from shared_utils import (
     system_prompt, perform_search, encode_image_to_base64, create_folder, create_file,
-    read_file, list_files, delete_file, write_to_file
+    read_file, list_files, delete_file, write_to_file, get_safe_path
 )
 
 load_dotenv()
@@ -151,7 +152,7 @@ def safe_path_operation(func: Callable):
 async def create_project(request: ProjectRequest, path: str):
     try:
         project_name = f"{request.template.lower()}_project"
-        project_path = os.path.join(PROJECTS_DIR, path, project_name).replace('\\', '/')
+        project_path = str(get_safe_path(path) / project_name).replace('\\', '/')
         os.makedirs(project_path, exist_ok=True)
         
         if request.template == "react":
@@ -356,7 +357,7 @@ async def chat(request: ChatRequest):
                 if tool_result['success']:
                     response_content += f"\nTool used: {tool_name}\nTool result: {tool_result['result']}\n"
                 else:
-                    response_content += f"\nTool used: {tool_name}\nTool error: {tool_result['error']}\n"
+                    response_content += f"\nTool used: {tool_name}\nTool error: {tool_result['error']}\n"                   
                 logger.info(f"Tool result: {tool_result}")
 
         conversation_history.append({"role": "assistant", "content": response_content})
@@ -390,100 +391,106 @@ async def download_projects():
 
 def cleanup(temp_dir: str):
     shutil.rmtree(temp_dir, ignore_errors=True)
-        
+
+current_working_directory = PROJECTS_DIR
+
+def get_relative_cwd():
+    global current_working_directory
+    return str(Path(current_working_directory).relative_to(PROJECTS_DIR))
+
 def get_shell():
     return "cmd.exe" if platform.system() == "Windows" else "/bin/bash"
 
 def execute_shell_command(command, cwd):
     shell = get_shell()
+    full_cwd = str(get_safe_path(cwd))
     if platform.system() == "Windows":
-        result = subprocess.run([shell, "/c", command], capture_output=True, text=True, cwd=cwd)
+        result = subprocess.run([shell, "/c", command], capture_output=True, text=True, cwd=full_cwd)
     else:
-        result = subprocess.run([shell, "-c", command], capture_output=True, text=True, cwd=cwd)
+        result = subprocess.run([shell, "-c", command], capture_output=True, text=True, cwd=full_cwd)
     return result.stdout + result.stderr
-
-def ensure_in_projects_dir():
-    if not os.getcwd().startswith(PROJECTS_DIR):
-        os.chdir(PROJECTS_DIR)
 
 @api_router.post("/console/execute")
 async def console_execute_command(request: CommandRequest):
+    global current_working_directory
     try:
-        ensure_in_projects_dir()
-        cwd = os.getcwd()
         command_parts = request.command.split()
         cmd = command_parts[0].lower()
 
         if cmd == "cd":
-            return handle_cd(command_parts[1] if len(command_parts) > 1 else "")
+            return handle_cd(command_parts[1] if len(command_parts) > 1 else ".")
         elif cmd == "ls" or (cmd == "dir" and platform.system() == "Windows"):
-            return handle_ls(cwd)
+            return handle_ls(current_working_directory)
         elif cmd == "pwd":
-            return handle_pwd(cwd)
+            return handle_pwd(current_working_directory)
         elif cmd == "echo":
-            return handle_echo(command_parts[1:], cwd)
+            return handle_echo(command_parts[1:], current_working_directory)
         elif cmd == "cat" or cmd == "type":
-            return handle_cat(command_parts[1] if len(command_parts) > 1 else "", cwd)
+            return handle_cat(command_parts[1] if len(command_parts) > 1 else "", current_working_directory)
         elif cmd == "mkdir":
-            return handle_mkdir(command_parts[1] if len(command_parts) > 1 else "", cwd)
+            return handle_mkdir(command_parts[1] if len(command_parts) > 1 else "", current_working_directory)
         elif cmd == "touch" or cmd == "echo.":
-            return handle_touch(command_parts[1] if len(command_parts) > 1 else "", cwd)
+            return handle_touch(command_parts[1] if len(command_parts) > 1 else "", current_working_directory)
         else:
-            output = execute_shell_command(request.command, cwd)
-            return {"result": output, "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+            output = execute_shell_command(request.command, current_working_directory)
+            return {"result": output, "cwd": get_relative_cwd()}
     except Exception as e:
         logger.error(f"Error in console_execute_command: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 def handle_cd(path):
+    global current_working_directory
     try:
-        new_path = os.path.abspath(os.path.join(os.getcwd(), path))
-        if os.path.exists(new_path) and os.path.isdir(new_path) and new_path.startswith(PROJECTS_DIR):
-            os.chdir(new_path)
-            current_dir = os.path.relpath(os.getcwd(), PROJECTS_DIR)
-            return {"result": f"Changed directory to: {current_dir}", "cwd": current_dir}
+        new_path = get_safe_path(os.path.join(current_working_directory, path))
+        if new_path.is_dir():
+            current_working_directory = str(new_path)
+            return {"result": f"Changed directory to: {get_relative_cwd()}", "cwd": get_relative_cwd()}
         else:
-            return {"result": f"Directory not found or access denied: {path}", "cwd": os.path.relpath(os.getcwd(), PROJECTS_DIR)}
+            return {"result": f"Directory not found or access denied: {path}", "cwd": get_relative_cwd()}
     except Exception as e:
-        return {"result": f"Error changing directory: {str(e)}", "cwd": os.path.relpath(os.getcwd(), PROJECTS_DIR)}
+        return {"result": f"Error changing directory: {str(e)}", "cwd": get_relative_cwd()}
 
 def handle_ls(cwd):
-    items = os.listdir(cwd)
-    return {"result": "\n".join(items), "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+    full_path = get_safe_path(cwd)
+    items = os.listdir(full_path)
+    return {"result": "\n".join(items), "cwd": get_relative_cwd()}
 
 def handle_pwd(cwd):
-    return {"result": cwd, "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+    full_path = get_safe_path(cwd)
+    return {"result": str(full_path), "cwd": get_relative_cwd()}
 
 def handle_echo(args, cwd):
-    return {"result": " ".join(args), "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+    full_path = get_safe_path(cwd)
+    return {"result": " ".join(args), "cwd": get_relative_cwd()}
 
 def handle_cat(filename, cwd):
     try:
-        with open(os.path.join(cwd, filename), 'r') as file:
+        full_path = get_safe_path(os.path.join(cwd, filename))
+        with full_path.open('r') as file:
             content = file.read()
-        return {"result": content, "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+        return {"result": content, "cwd": get_relative_cwd()}
     except Exception as e:
-        return {"result": f"Error reading file: {str(e)}", "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+        return {"result": f"Error reading file: {str(e)}", "cwd": get_relative_cwd()}
 
 def handle_mkdir(dirname, cwd):
     try:
-        os.mkdir(os.path.join(cwd, dirname))
-        return {"result": f"Directory created: {dirname}", "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+        full_path = get_safe_path(os.path.join(cwd, dirname))
+        full_path.mkdir(parents=True, exist_ok=True)
+        return {"result": f"Directory created: {dirname}", "cwd": get_relative_cwd()}
     except Exception as e:
-        return {"result": f"Error creating directory: {str(e)}", "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+        return {"result": f"Error creating directory: {str(e)}", "cwd": get_relative_cwd()}
 
 def handle_touch(filename, cwd):
     try:
-        with open(os.path.join(cwd, filename), 'a'):
-            os.utime(os.path.join(cwd, filename), None)
-        return {"result": f"File touched: {filename}", "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+        full_path = get_safe_path(os.path.join(cwd, filename))
+        full_path.touch()
+        return {"result": f"File touched: {filename}", "cwd": get_relative_cwd()}
     except Exception as e:
-        return {"result": f"Error touching file: {str(e)}", "cwd": os.path.relpath(cwd, PROJECTS_DIR)}
+        return {"result": f"Error touching file: {str(e)}", "cwd": get_relative_cwd()}
 
 @api_router.get("/console/cwd")
 async def console_get_current_working_directory():
-    ensure_in_projects_dir()
-    return {"cwd": os.path.relpath(os.getcwd(), PROJECTS_DIR)}
+    return {"cwd": get_relative_cwd()}
 
 @api_router.post("/run_python")
 async def run_python(request: CommandRequest):
@@ -526,7 +533,6 @@ async def pip_install(request: CommandRequest):
         return {"result": f"Error: {e.stderr.decode('utf-8')}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 app.include_router(api_router, prefix="/api")
 

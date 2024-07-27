@@ -304,7 +304,7 @@ def read_file(path: str) -> str:
         if not os.path.isfile(full_path):
             logger.error(f"File not found: {full_path}")
             return f"File not found: {path}"
-        with open(full_path, 'r') as f:
+        with open(full_path, 'r', encoding='utf-8') as f:
             content = f.read()
         logger.info(f"File read successfully: {full_path}")
         return content
@@ -317,9 +317,9 @@ def list_files(path: str = ".") -> list:
         full_path = get_safe_path(path)
         files = []
         for item in full_path.iterdir():
-            relative_path = item.relative_to(Path(PROJECTS_DIR))
+            relative_path = item.relative_to(PROJECTS_DIR)
             files.append({
-                "name": item.name,
+                "name": str(relative_path),  # Use relative path instead of just the name
                 "isDirectory": item.is_dir(),
                 "size": item.stat().st_size if item.is_file() else "-",
                 "modifiedDate": datetime.fromtimestamp(item.stat().st_mtime).strftime('%m-%d %H:%M')

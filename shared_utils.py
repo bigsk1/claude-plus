@@ -71,6 +71,7 @@ create_folder("simple_game")
 create_file("simple_game/game.py", "# Simple Python Game\n\nimport random\n\n# Game code here...")
 
 STRUCTURED PROJECT CREATION APPROACH:
+IMPORTANT NEVER stop after just creating a folder or a single file. ALWAYS complete the ENTIRE task in ONE response.
 1. Create the main project folder:
    create_folder("project_name")
 
@@ -108,7 +109,7 @@ After completing a task:
 Additional Guidelines:
 1. Always use the appropriate tool for file operations and searches. Don't just describe actions, perform them.
 2. You cannot access or modify files outside the projects directory.
-3. For uploaded files, analyze the contents immediately without using the read_file tool.
+3. For uploaded files, analyze the contents immediately without using the read_file tool. Files are automatically uploaded to "projects/uploads".
 4. For image uploads, analyze and describe the contents in detail.
 5. Use the search tool for current information, then summarize results in context.
 

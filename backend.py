@@ -14,15 +14,13 @@
 # along with Claude Plus.  If not, see <https://www.gnu.org/licenses/>.
 import os
 import logging
-from typing import Optional, Callable, List
+from typing import Optional, List, Callable
 from contextlib import asynccontextmanager
-# from functools import wraps
+from functools import wraps
 import subprocess
 import platform
 import shutil
 import tempfile
-import asyncio
-from functools import partial
 from starlette.background import BackgroundTask
 import uvicorn
 from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Request, Query
@@ -56,7 +54,7 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -129,24 +127,24 @@ async def get_automode_status():
     return {"progress": automode_progress, "messages": automode_messages}
 
 
-# def is_safe_path(path: str) -> bool:
-#     abs_projects_dir = os.path.abspath(PROJECTS_DIR)
-#     abs_path = os.path.abspath(os.path.join(PROJECTS_DIR, path))
-#     return os.path.commonpath([abs_projects_dir, abs_path]) == abs_projects_dir
+def is_safe_path(path: str) -> bool:
+    abs_projects_dir = os.path.abspath(PROJECTS_DIR)
+    abs_path = os.path.abspath(os.path.join(PROJECTS_DIR, path))
+    return os.path.commonpath([abs_projects_dir, abs_path]) == abs_projects_dir
 
-# def safe_path_operation(func: Callable):
-#     @wraps(func)
-#     async def wrapper(*args, **kwargs):
-#         path = kwargs.get('path', '.')
-#         full_path = os.path.abspath(os.path.join(PROJECTS_DIR, path))
-#         print(f"[DEBUG] safe_path_operation: original_path={path}, full_path={full_path}")
-#         if not full_path.startswith(PROJECTS_DIR):
-#             raise HTTPException(status_code=403, detail="Access to this directory is not allowed")
+def safe_path_operation(func: Callable):
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        path = kwargs.get('path', '.')
+        full_path = os.path.abspath(os.path.join(PROJECTS_DIR, path))
+        print(f"[DEBUG] safe_path_operation: original_path={path}, full_path={full_path}")
+        if not full_path.startswith(PROJECTS_DIR):
+            raise HTTPException(status_code=403, detail="Access to this directory is not allowed")
         
-#         kwargs['path'] = os.path.relpath(full_path, PROJECTS_DIR)
-#         print(f"[DEBUG] safe_path_operation: adjusted_path={kwargs['path']}")
-#         return await func(*args, **kwargs)
-#     return wrapper
+        kwargs['path'] = os.path.relpath(full_path, PROJECTS_DIR)
+        print(f"[DEBUG] safe_path_operation: adjusted_path={kwargs['path']}")
+        return await func(*args, **kwargs)
+    return wrapper
 
 
 @app.post("/create_project")

@@ -57,6 +57,7 @@ CRITICAL INSTRUCTIONS:
 4. DO NOT attempt to create a file in a folder that hasn't been created yet.
 5. Provide a full implementation including all necessary files and their content in ONE response.
 6. After task completion, summarize ALL actions taken and show the full project structure.
+7. Add "Task complete" at the end of your response to indicate the task has been completed.
 
 File Operation Guidelines:
 1. The 'projects' directory is your root directory. All file operations occur within this directory.
@@ -90,6 +91,7 @@ IMPORTANT NEVER stop after just creating a folder or a single file. ALWAYS compl
    ... (write to all files that need content)
 
 5. Provide a summary of the created project structure and functionality.
+6. Add "Task complete" at the end of your response to indicate the task has been completed.
 
 Remember: NEVER stop after just creating a folder or a single file. ALWAYS complete the ENTIRE task in ONE response.
 
@@ -101,10 +103,10 @@ IMPORTANT: When performing file operations:
 3. If a file operation seems to fail or produce unexpected results, report this to the user immediately.
 4. Keep track of the current state of the project directory and files you've created or modified.
 
-After completing a task:
+After completing a task show all results done in ONE response:
 1. Report all actions taken and their results
 2. Provide an overview of the created project structure
-3. Ask if the user wants to make any changes or additions
+3. Add "Task complete" at the end of your response to indicate the task has been completed.
 
 Additional Guidelines:
 1. Always use the appropriate tool for file operations and searches. Don't just describe actions, perform them.
@@ -116,15 +118,15 @@ Additional Guidelines:
 Always tailor your responses to the user's specific needs and context, focusing on providing accurate, helpful, and detailed assistance in software development and project management.
 """
 
-
 def get_safe_path(path: str) -> Path:
     abs_projects_dir = Path(PROJECTS_DIR).resolve()
-    # Remove leading slash and normalize path
     normalized_path = Path(path.lstrip('/')).as_posix()
     full_path = (abs_projects_dir / normalized_path).resolve()
     if not full_path.is_relative_to(abs_projects_dir):
         raise ValueError(f"Access to path outside of projects directory is not allowed: {path}")
     return full_path
+
+
 def sync_filesystem():
     try:
         if hasattr(os, 'sync'):
@@ -135,6 +137,7 @@ def sync_filesystem():
         logger.info("File system synced")
     except Exception as e:
         logger.error(f"Error syncing file system: {str(e)}", exc_info=True)
+
 
 def encode_image_to_base64(image_data):
     try:
@@ -257,6 +260,7 @@ def tavily_search(query: str) -> str:
 
 def create_folder(path: str) -> str:
     try:
+        logger.debug(f"Creating folder at path: {path}")
         full_path = get_safe_path(path)
         full_path.mkdir(parents=True, exist_ok=True)
         sync_filesystem()
@@ -270,9 +274,10 @@ def create_folder(path: str) -> str:
 
 def create_file(path: str, content: str = "") -> str:
     try:
+        logger.debug(f"Creating file at path: {path} with content length: {len(content)}")
         full_path = get_safe_path(path)
         full_path.parent.mkdir(parents=True, exist_ok=True)
-        full_path.write_text(content)
+        full_path.write_text(content, encoding='utf-8')
         sync_filesystem()
         if not full_path.exists():
             raise FileNotFoundError(f"Failed to create file: {full_path}")
@@ -284,8 +289,8 @@ def create_file(path: str, content: str = "") -> str:
 
 def write_to_file(path: str, content: str) -> str:
     try:
+        logger.debug(f"Writing to file at path: {path} with content length: {len(content)}")
         full_path = get_safe_path(path)
-        logger.debug(f"Full path for writing: {full_path}")
         with open(full_path, 'w', encoding='utf-8') as f:
             f.write(content)
         sync_filesystem()
@@ -297,10 +302,10 @@ def write_to_file(path: str, content: str) -> str:
         logger.error(f"Error writing to file: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error writing to file: {str(e)}")
 
-
 def read_file(path: str) -> str:
     try:
         full_path = get_safe_path(path)
+        logger.debug(f"Reading file at path: {full_path}")
         if not os.path.isfile(full_path):
             logger.error(f"File not found: {full_path}")
             return f"File not found: {path}"
@@ -311,6 +316,7 @@ def read_file(path: str) -> str:
     except Exception as e:
         logger.error(f"Error reading file: {str(e)}", exc_info=True)
         return f"Error reading file: {str(e)}"
+
 
 def list_files(path: str = ".") -> list:
     try:

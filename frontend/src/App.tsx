@@ -366,9 +366,29 @@ function App() {
     }
   };
 
-  const clearMessages = () => {
-    setMessages([]);
+  const clearMessages = async () => {
+    try {
+        setMessages([]);
+        await axios.post(`${API_URL}/clear_state`);
+        toast({
+            title: "Chat and project state cleared.",
+            description: "You can start a new project.",
+            status: "success",
+            duration: 3000,
+            isClosable: true,
+        });
+    } catch (error) {
+        console.error("Error clearing project state:", error);
+        toast({
+            title: "Error",
+            description: "Failed to clear project state. Please try again.",
+            status: "error",
+            duration: 3000,
+            isClosable: true,
+        });
+    }
   };
+
 
   const viewSetupInstructions = async (fileName: string) => {
     setIsLoading(true);

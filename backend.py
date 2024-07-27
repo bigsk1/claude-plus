@@ -30,7 +30,7 @@ from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from automode_logic import AutomodeRequest, start_automode_logic
-from tools import tools, execute_tool
+from tools import tools, execute_tool, sync_project_state_with_fs, clear_state_file
 from config import PROJECTS_DIR, UPLOADS_DIR, CLAUDE_MODEL, anthropic_client
 from shared_utils import (
     system_prompt, perform_search, encode_image_to_base64, create_folder, create_file,
@@ -47,6 +47,8 @@ api_router = APIRouter()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    sync_project_state_with_fs()
+    logger.info("Project state synchronized with file system")
     logger.info("Available endpoints:")
     for route in app.routes:
         if hasattr(route, "methods"):
@@ -104,15 +106,13 @@ class DirectoryContents(BaseModel):
     path: str
     contents: List[str]
 
-
 # Conversation history
 conversation_history = []
 
 # Global state for automode
 automode_progress = 0
 automode_messages = []
-
-
+    
 @app.post("/automode")
 async def start_automode(request: Request):
     automode_request = AutomodeRequest(**await request.json())
@@ -325,6 +325,17 @@ async def search(query: SearchQuery):
             error_details += f"\nTraceback:\n{''.join(traceback.format_tb(e.__traceback__))}"
         raise HTTPException(status_code=500, detail=f"Error performing search: {error_details}")
 
+@app.post("/clear_state")
+async def clear_project_state():
+    try:
+        global project_state
+        project_state = clear_state_file()
+        logger.info("Project state cleared")
+        return {"message": "Project state cleared successfully"}
+    except Exception as e:
+        logger.error(f"Error clearing project state: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Chat endpoint
 @app.post("/chat")
 async def chat(request: ChatRequest):
@@ -345,6 +356,7 @@ async def chat(request: ChatRequest):
         logger.info(f"AI response: {response.content}")
         
         response_content = ""
+        task_complete = False
         for content in response.content:
             if content.type == 'text':
                 logger.info(f"Text response: {content.text}")
@@ -357,21 +369,25 @@ async def chat(request: ChatRequest):
                 if tool_result['success']:
                     response_content += f"\nTool used: {tool_name}\nTool result: {tool_result['result']}\n"
                 else:
-                    response_content += f"\nTool used: {tool_name}\nTool error: {tool_result['error']}\n"                   
+                    response_content += f"\nTool used: {tool_name}\nTool error: {tool_result['error']}\n"
                 logger.info(f"Tool result: {tool_result}")
+            elif content.type == 'task_complete':
+                task_complete = True
+
+        if task_complete:
+            response_content += "\nTask complete."
 
         conversation_history.append({"role": "assistant", "content": response_content})
         return {"response": response_content}
     except Exception as e:
         logger.error(f"Error in chat endpoint: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-
     
 @api_router.get("/download_projects")
 async def download_projects():
     if not os.path.exists(PROJECTS_DIR):
         raise HTTPException(status_code=404, detail="Projects directory not found")
-   
+
     temp_dir = tempfile.mkdtemp()
     try:
         zip_filename = "projects.zip"

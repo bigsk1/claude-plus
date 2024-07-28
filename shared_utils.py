@@ -14,18 +14,19 @@
 # along with Claude Plus.  If not, see <https://www.gnu.org/licenses/>.
 import os
 import json
-import re
+# import re
 import logging
 import platform
 import base64
-from typing import Dict, Any
-import requests
+# from typing import Dict, Any
 import base64
+import requests
 from pathlib import Path
 from PIL import Image
 import io
 from fastapi import HTTPException
 from config import PROJECTS_DIR, SEARCH_RESULTS_LIMIT, SEARCH_PROVIDER, SEARXNG_URL, tavily_client
+from project_state import project_state, save_state_to_file
 from urllib.parse import urlparse
 from datetime import datetime
 
@@ -305,12 +306,9 @@ def write_to_file(path: str, content: str) -> str:
 def read_file(path: str) -> str:
     try:
         full_path = get_safe_path(path)
-        logger.debug(f"Reading file at path: {full_path}")
-        if not os.path.isfile(full_path):
-            logger.error(f"File not found: {full_path}")
-            return f"File not found: {path}"
-        with open(full_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        if not full_path.is_file():
+            raise FileNotFoundError(f"File not found: {full_path}")
+        content = full_path.read_text()
         logger.info(f"File read successfully: {full_path}")
         return content
     except Exception as e:
@@ -323,14 +321,24 @@ def list_files(path: str = ".") -> list:
         full_path = get_safe_path(path)
         files = []
         for item in full_path.iterdir():
-            relative_path = item.relative_to(PROJECTS_DIR)
-            files.append({
-                "name": str(relative_path),  # Use relative path instead of just the name
+            rel_path = str(item.relative_to(PROJECTS_DIR)).replace(os.sep, '/')
+            file_info = {
+                "name": item.name,
                 "isDirectory": item.is_dir(),
                 "size": item.stat().st_size if item.is_file() else "-",
                 "modifiedDate": datetime.fromtimestamp(item.stat().st_mtime).strftime('%m-%d %H:%M')
-            })
+            }
+            files.append(file_info)
+            
+            # Update project_state
+            if item.is_dir():
+                project_state["folders"].add(rel_path)
+            else:
+                project_state["files"].add(rel_path)
+        
         logger.info(f"Listed files in {full_path}")
+        save_state_to_file(project_state)
+        logger.debug(f"Updated project state: {project_state}")
         return files
     except Exception as e:
         logger.error(f"Error listing files: {str(e)}", exc_info=True)
@@ -351,3 +359,4 @@ def delete_file(path: str) -> str:
     except Exception as e:
         logger.error(f"Error deleting file: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
+

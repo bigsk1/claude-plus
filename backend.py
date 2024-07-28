@@ -29,8 +29,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from automode_logic import AutomodeRequest, start_automode_logic
-from tools import tools, execute_tool, sync_project_state_with_fs, clear_state_file
+from automode_logic import AutomodeRequest, start_automode_logic, automode_messages, automode_progress
+from tools import tools, execute_tool 
+from project_state import sync_project_state_with_fs, clear_state_file, refresh_project_state
 from config import PROJECTS_DIR, UPLOADS_DIR, CLAUDE_MODEL, anthropic_client
 from shared_utils import (
     system_prompt, perform_search, encode_image_to_base64, create_folder, create_file,
@@ -40,7 +41,7 @@ from shared_utils import (
 load_dotenv()
 
 
-app = FastAPI()
+# app = FastAPI()
 
 api_router = APIRouter()
 
@@ -110,17 +111,19 @@ class DirectoryContents(BaseModel):
 conversation_history = []
 
 # Global state for automode
-automode_progress = 0
-automode_messages = []
+# automode_progress = 0
+# automode_messages = []
     
 @app.post("/automode")
 async def start_automode(request: Request):
-    automode_request = AutomodeRequest(**await request.json())
+    automode_request = AutomodeRequest(**request.json())
+    sync_project_state_with_fs()  # Ensure state is synced before starting
     return StreamingResponse(start_automode_logic(automode_request), media_type="text/event-stream")
 
 @app.get("/automode")
 async def start_automode_get(message: str):
     automode_request = AutomodeRequest(message=message)
+    sync_project_state_with_fs()  # Ensure state is synced before starting
     return StreamingResponse(start_automode_logic(automode_request), media_type="text/event-stream")
 
 @app.get("/automode-status")
@@ -208,7 +211,7 @@ async def write_file_endpoint(request: Request, path: str = Query(...)):
     try:
         logger.debug(f"Received path: {path}")
         try:
-            body = await request.json()
+            body = request.json()
             logger.debug(f"Received body: {body}")
         except Exception as e:
             logger.error(f"Error parsing JSON body: {str(e)}")
@@ -330,6 +333,7 @@ async def clear_project_state():
     try:
         global project_state
         project_state = clear_state_file()
+        sync_project_state_with_fs()
         logger.info("Project state cleared")
         return {"message": "Project state cleared successfully"}
     except Exception as e:
@@ -476,7 +480,6 @@ def handle_pwd(cwd):
     return {"result": str(full_path), "cwd": get_relative_cwd()}
 
 def handle_echo(args, cwd):
-    full_path = get_safe_path(cwd)
     return {"result": " ".join(args), "cwd": get_relative_cwd()}
 
 def handle_cat(filename, cwd):
@@ -549,6 +552,17 @@ async def pip_install(request: CommandRequest):
         return {"result": f"Error: {e.stderr.decode('utf-8')}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/refresh_state")
+def refresh_project_state_endpoint():
+    try:
+        refresh_project_state()
+        logger.info("Project state refreshed successfully")
+        return {"message": "Project state refreshed successfully"}
+    except Exception as e:
+        logger.error(f"Error refreshing project state: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 app.include_router(api_router, prefix="/api")
 

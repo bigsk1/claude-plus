@@ -139,47 +139,48 @@ function App() {
 
   const handleAutoMode = async () => {
     if (input.trim()) {
-      try {
-        setIsAutoMode(true);
-        setAutomodeProgress(0);
-        setMessages(prev => [...prev, { role: 'user', content: input }]);
-        setInput(''); // Clear input field
+        try {
+            setIsAutoMode(true);
+            setAutomodeProgress(0);
+            setMessages(prev => [...prev, { role: 'user', content: input }]);
+            setInput(''); // Clear input field
 
-        const eventSource = new EventSource(`${API_URL}/automode?message=${encodeURIComponent(input)}`);
+            const eventSource = new EventSource(`${API_URL}/automode?message=${encodeURIComponent(input)}`);
 
-        eventSource.onmessage = (event) => {
-          const data = JSON.parse(event.data);
-          if (data.event === 'message') {
-            setMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
-            setAutomodeProgress(prev => Math.min(prev + 20, 100)); // Example progress update
-          } else if (data.event === 'end') {
-            setAutomodeProgress(100);
-            eventSource.close();
-            setIsAutoMode(false);
-          } else if (data.event === 'error') {
-            setMessages(prev => [...prev, { role: 'system', content: data.content }]);
-            eventSource.close();
-            setIsAutoMode(false);
-          }
-        };
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.event === 'message') {
+                    setMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
+                    setAutomodeProgress(prev => Math.min(prev + 20, 100)); // Example progress update
+                } else if (data.event === 'end') {
+                    setAutomodeProgress(100);
+                    eventSource.close();
+                    setIsAutoMode(false);
+                } else if (data.event === 'error') {
+                    setMessages(prev => [...prev, { role: 'system', content: data.content }]);
+                    eventSource.close();
+                    setIsAutoMode(false);
+                }
+            };
 
-        eventSource.onerror = (error) => {
-          console.error('Error in automode:', error);
-          setMessages(prev => [...prev, { role: 'system', content: 'Error: Automode failed' }]);
-          eventSource.close();
-          setIsAutoMode(false);
-        };
+            eventSource.onerror = (error) => {
+                console.error('Error in automode:', error);
+                setMessages(prev => [...prev, { role: 'system', content: 'Error: Automode failed' }]);
+                eventSource.close();
+                setIsAutoMode(false);
+            };
 
-        // Cleanup on component unmount
-        return () => {
-          eventSource.close();
-        };
-      } catch (error) {
-        console.error('Error in automode:', error);
-        setMessages(prev => [...prev, { role: 'system', content: 'Error: Automode failed' }]);
-      }
+            // Cleanup on component unmount
+            return () => {
+                eventSource.close();
+            };
+        } catch (error) {
+            console.error('Error in automode:', error);
+            setMessages(prev => [...prev, { role: 'system', content: 'Error: Automode failed' }]);
+        }
     }
   };
+
 
   const handleSearch = async () => {
     if (searchQuery.trim()) {

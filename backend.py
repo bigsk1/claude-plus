@@ -32,7 +32,10 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from automode_logic import AutomodeRequest, start_automode_logic, automode_messages, automode_progress
 from tools import tools, execute_tool 
-from project_state import sync_project_state_with_fs, clear_state_file, refresh_project_state, initialize_project_state
+from project_state import (
+    sync_project_state_with_fs, clear_state_file, refresh_project_state,
+    initialize_project_state, project_state, save_state_to_file
+)
 from config import PROJECTS_DIR, UPLOADS_DIR, CLAUDE_MODEL, anthropic_client
 from shared_utils import (
     system_prompt, perform_search, encode_image_to_base64, create_folder, create_file,
@@ -187,8 +190,10 @@ async def create_folder_endpoint(path: str = Query(...)):
 @app.post("/create_file")
 async def create_file_endpoint(path: str = Query(...), content: str = ""):
     try:
-        result = await create_file(path, content)
-        logger.info(f"File created: {path}")
+        # Remove any leading slashes to ensure the path is relative
+        cleaned_path = path.lstrip('/')
+        result = await create_file(cleaned_path, content)
+        logger.info(f"File created: {cleaned_path}")
         return {"message": result}
     except Exception as e:
         logger.error(f"Error creating file: {str(e)}", exc_info=True)
@@ -283,7 +288,7 @@ async def analyze_image(file: UploadFile = File(...)):
 
         logger.debug(f"Image encoded, length: {len(encoded_image)}")
 
-        analysis_result = await anthropic_client.messages.create(
+        analysis_result = anthropic_client.messages.create(
             model=CLAUDE_MODEL,
             max_tokens=1000,
             system=system_prompt,
@@ -343,16 +348,26 @@ async def clear_project_state():
 # Chat endpoint
 @app.post("/chat")
 async def chat(request: ChatRequest):
-    global conversation_history
+    global conversation_history, project_state
     try:
         message = request.message
         conversation_history.append({"role": "user", "content": message})
         
+        # Sync project state before each interaction
+        project_state = await sync_project_state_with_fs()
+        
+        # Update system prompt with current project state
+        current_system_prompt = f"{system_prompt}\n\nCurrent project state:\nFolders: {', '.join(project_state['folders'])}\nFiles: {', '.join(project_state['files'])}"
+        
         logger.info(f"Sending message to AI: {message}")
-        response = anthropic_client.messages.create(
+        logger.debug(f"Current project state before AI response: {project_state}")
+        
+        # Use asyncio.to_thread to run the synchronous method in a separate thread
+        response = await asyncio.to_thread(
+            anthropic_client.messages.create,
             model=CLAUDE_MODEL,
             max_tokens=4096,
-            system=system_prompt,
+            system=current_system_prompt,
             messages=conversation_history,
             tools=tools
         )
@@ -382,6 +397,11 @@ async def chat(request: ChatRequest):
             response_content += "\nTask complete."
 
         conversation_history.append({"role": "assistant", "content": response_content})
+        
+        # Sync project state after AI response
+        project_state = await sync_project_state_with_fs()
+        logger.debug(f"Current project state after AI response: {project_state}")
+        
         return {"response": response_content}
     except Exception as e:
         logger.error(f"Error in chat endpoint: {str(e)}", exc_info=True)

@@ -20,16 +20,16 @@ import logging
 import platform
 import base64
 # from typing import Dict, Any
-import base64
 import requests
 from pathlib import Path
 from PIL import Image
 import io
 from fastapi import HTTPException
 from config import PROJECTS_DIR, SEARCH_RESULTS_LIMIT, SEARCH_PROVIDER, SEARXNG_URL, tavily_client
-from project_state import project_state, save_state_to_file
+from project_state import project_state, save_state_to_file, update_project_state
 from urllib.parse import urlparse
 from datetime import datetime
+
 
 
 logger = logging.getLogger(__name__)
@@ -140,7 +140,21 @@ async def sync_filesystem():
     except Exception as e:
         logger.error(f"Error syncing file system: {str(e)}", exc_info=True)
 
-
+async def retry_file_operation(operation, *args, max_attempts=5, delay=0.5, **kwargs):
+    for attempt in range(max_attempts):
+        try:
+            logger.debug(f"Attempting operation {operation.__name__}, attempt {attempt + 1}/{max_attempts}")
+            result = await operation(*args, **kwargs)
+            logger.info(f"Operation {operation.__name__} successful on attempt {attempt + 1}")
+            return result
+        except Exception as e:
+            logger.warning(f"Attempt {attempt + 1} for {operation.__name__} failed: {str(e)}")
+            if attempt == max_attempts - 1:  # Last attempt
+                logger.error(f"All {max_attempts} attempts for {operation.__name__} failed. Last error: {str(e)}")
+                raise
+            logger.info(f"Waiting {delay} seconds before next attempt")
+            await asyncio.sleep(delay)
+            
 async def encode_image_to_base64(image_data):
     try:
         logger.debug(f"Encoding image, data type: {type(image_data)}")
@@ -276,6 +290,10 @@ async def create_folder(path: str) -> str:
         await sync_filesystem()
         if not full_path.exists():
             raise FileNotFoundError(f"Failed to create folder: {full_path}")
+        
+        rel_path = str(full_path.relative_to(PROJECTS_DIR)).replace(os.sep, '/')
+        await update_project_state(rel_path, is_folder=True)
+        
         logger.info(f"Folder created and verified: {full_path}")
         return f"Folder created: {full_path}"
     except Exception as e:
@@ -284,15 +302,38 @@ async def create_folder(path: str) -> str:
 
 async def create_file(path: str, content: str = "") -> str:
     try:
-        logger.debug(f"Creating file at path: {path} with content length: {len(content)}")
-        full_path = get_safe_path(path)
+        logger.debug(f"Attempting to create file at path: {path}")
+        
+        # Normalize the path and make it relative to PROJECTS_DIR
+        normalized_path = os.path.normpath(path).lstrip(os.sep).replace('\\', '/')
+        full_path = Path(PROJECTS_DIR) / normalized_path
+        
+        logger.debug(f"Normalized path: {normalized_path}")
+        logger.debug(f"Full path: {full_path}")
+
+        # Ensure the directory exists
         full_path.parent.mkdir(parents=True, exist_ok=True)
-        full_path.write_text(content, encoding='utf-8')
-        await sync_filesystem()
+
+        # Write content using asyncio.to_thread
+        await asyncio.to_thread(lambda: full_path.write_text(content, encoding='utf-8'))
+
+        # Verify file exists and content is correct
         if not full_path.exists():
             raise FileNotFoundError(f"Failed to create file: {full_path}")
-        logger.info(f"File created and verified: {full_path}")
-        return f"File created: {full_path}"
+
+        # Read content using asyncio.to_thread to verify
+        written_content = await asyncio.to_thread(lambda: full_path.read_text(encoding='utf-8'))
+
+        if written_content != content:
+            raise ValueError(f"File content verification failed for {full_path}")
+
+        file_size = full_path.stat().st_size
+        logger.info(f"File created and verified: {full_path} (Size: {file_size} bytes)")
+
+        await sync_filesystem()
+        await update_project_state(str(full_path.relative_to(PROJECTS_DIR)), is_folder=False)
+
+        return f"File created: {full_path} (Size: {file_size} bytes)"
     except Exception as e:
         logger.error(f"Error creating file: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error creating file: {str(e)}")
@@ -301,26 +342,29 @@ async def write_to_file(path: str, content: str) -> str:
     try:
         logger.debug(f"Writing to file at path: {path} with content length: {len(content)}")
         full_path = get_safe_path(path)
-        logger.debug(f"Full path resolved to: {full_path}")
         
         # Ensure the directory exists
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
         
-        with open(full_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-        await sync_filesystem()
+        # Write content using asyncio.to_thread
+        await asyncio.to_thread(lambda: open(full_path, 'w', encoding='utf-8').write(content))
         
+        # Verify file exists and content is correct
         if not os.path.exists(full_path):
-            raise FileNotFoundError(f"Failed to write to file: {full_path}")
+            raise FileNotFoundError(f"Failed to create file: {full_path}")
         
-        # Verify the content was written correctly
-        with open(full_path, 'r', encoding='utf-8') as f:
-            written_content = f.read()
+        # Read content using asyncio.to_thread
+        written_content = await asyncio.to_thread(lambda: open(full_path, 'r', encoding='utf-8').read())
+        
         if written_content != content:
             raise ValueError(f"File content verification failed for {full_path}")
         
         file_size = os.path.getsize(full_path)
         logger.info(f"Content written to file and verified: {full_path} (Size: {file_size} bytes)")
+        
+        await sync_filesystem()
+        await update_project_state(path, is_folder=False)
+        
         return f"Content written to file: {full_path} (Size: {file_size} bytes)"
     except Exception as e:
         logger.error(f"Error writing to file: {str(e)}", exc_info=True)
@@ -353,15 +397,14 @@ async def list_files(path: str = ".") -> list:
             }
             files.append(file_info)
             
-            # Update project_state
+            # Update project_state without overwriting
             if item.is_dir():
                 project_state["folders"].add(rel_path)
             else:
                 project_state["files"].add(rel_path)
         
         logger.info(f"Listed files in {full_path}")
-        await save_state_to_file(project_state)
-        logger.debug(f"Updated project state: {project_state}")
+        logger.debug(f"Current project state: {project_state}")
         return files
     except Exception as e:
         logger.error(f"Error listing files: {str(e)}", exc_info=True)
@@ -378,6 +421,7 @@ async def delete_file(path: str) -> str:
             raise FileNotFoundError(f"File or directory not found: {full_path}")
         logger.info(f"Deleted: {full_path}")
         await sync_filesystem()
+        await update_project_state(path, is_folder=full_path.is_dir(), is_delete=True)
         return f"Deleted: {full_path}"
     except Exception as e:
         logger.error(f"Error deleting file: {str(e)}", exc_info=True)

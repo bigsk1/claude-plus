@@ -1,6 +1,6 @@
 import os
 import logging
-from shared_utils import create_file, read_file, write_to_file, create_folder, delete_file, perform_search, list_files
+from shared_utils import create_file, read_file, write_to_file, create_folder, delete_file, perform_search, list_files, sync_filesystem
 from project_state import save_state_to_file, project_state
 from config import SEARCH_PROVIDER, PROJECTS_DIR
 
@@ -101,7 +101,7 @@ tools = [
     }
 ]
 
-def execute_tool(tool_name, tool_input):
+async def execute_tool(tool_name, tool_input):
     global project_state
     try:
         logger.debug(f"Executing tool: {tool_name} with input: {tool_input}")
@@ -111,7 +111,7 @@ def execute_tool(tool_name, tool_input):
             full_path = os.path.normpath(tool_input["path"]).replace(os.sep, '/')
             if full_path in project_state["folders"]:
                 return {"success": True, "result": f"Folder already exists: {full_path}"}
-            result = create_folder(tool_input["path"])
+            result = await create_folder(tool_input["path"])
             project_state["folders"].add(full_path)
         elif tool_name == "create_file":
             full_path = os.path.normpath(tool_input["path"]).replace(os.sep, '/')
@@ -122,7 +122,7 @@ def execute_tool(tool_name, tool_input):
                 return {"success": False, "error": f"Folder does not exist: {folder_path}"}
             if full_path in project_state["files"]:
                 return {"success": True, "result": f"File already exists: {full_path}"}
-            result = create_file(tool_input["path"], tool_input.get("content", ""))
+            result = await create_file(tool_input["path"], tool_input.get("content", ""))
             project_state["files"].add(full_path)
         elif tool_name == "write_to_file":
             full_path = os.path.normpath(tool_input["path"]).replace(os.sep, '/')
@@ -132,7 +132,14 @@ def execute_tool(tool_name, tool_input):
                     project_state["files"].add(full_path)
                 else:
                     return {"success": False, "error": f"File does not exist: {full_path}"}
-            result = write_to_file(tool_input["path"], tool_input["content"])
+            try:
+                result = await write_to_file(tool_input["path"], tool_input["content"])
+                project_state["files"].add(full_path)
+                # await save_state_to_file(project_state)
+                return {"success": True, "result": result}
+            except Exception as e:
+                logger.error(f"Error in write_to_file: {str(e)}", exc_info=True)
+                return {"success": False, "error": f"Error writing to file: {str(e)}"}
         elif tool_name == "read_file":
             full_path = os.path.normpath(tool_input["path"]).replace(os.sep, '/')
             if full_path not in project_state["files"]:
@@ -141,22 +148,23 @@ def execute_tool(tool_name, tool_input):
                     project_state["files"].add(full_path)
                 else:
                     return {"success": False, "error": f"File does not exist: {full_path}"}
-            result = read_file(tool_input["path"])
+            result = await read_file(tool_input["path"])
         elif tool_name == "list_files":
-            result = list_files(tool_input["path"])
+            result = await list_files(tool_input["path"])
         elif tool_name == "delete_file":
             full_path = os.path.normpath(tool_input["path"]).replace(os.sep, '/')
             if full_path not in project_state["files"] and full_path not in project_state["folders"]:
                 return {"success": False, "error": f"File or folder does not exist: {full_path}"}
-            result = delete_file(tool_input["path"])
+            result = await delete_file(tool_input["path"])
             project_state["files"].discard(full_path)
             project_state["folders"].discard(full_path)
         elif tool_name == "search":
-            result = perform_search(tool_input["query"])
+            result = await perform_search(tool_input["query"])
         else:
             return {"success": False, "error": f"Unknown tool: {tool_name}"}
         
-        save_state_to_file(project_state)
+        await save_state_to_file(project_state)
+        await sync_filesystem()
         logger.debug(f"Tool result: {result}")
         logger.debug(f"Project state after {tool_name}: {project_state}")
         return {"success": True, "result": result}

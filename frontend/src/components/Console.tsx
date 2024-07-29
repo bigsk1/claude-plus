@@ -17,7 +17,9 @@ const Console: React.FC = () => {
   const terminalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetchCurrentDirectory();
+    (async () => {
+        await fetchCurrentDirectory();
+    })();
   }, []);
 
   useEffect(() => {

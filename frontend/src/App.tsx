@@ -59,7 +59,9 @@ function App() {
   const toast = useToast();
 
   useEffect(() => {
-    listFiles(currentDirectory);
+    (async () => {
+        await listFiles(currentDirectory);
+    })();
   }, [currentDirectory]);
 
   useEffect(() => {
@@ -143,35 +145,41 @@ function App() {
             setIsAutoMode(true);
             setAutomodeProgress(0);
             setMessages(prev => [...prev, { role: 'user', content: input }]);
-            setInput(''); // Clear input field
-
+            setInput('');
+            console.log("Starting automode");
             const eventSource = new EventSource(`${API_URL}/automode?message=${encodeURIComponent(input)}`);
-
             eventSource.onmessage = (event) => {
+                console.log("Received SSE event:", event);
                 const data = JSON.parse(event.data);
+                console.log("Parsed event data:", data);
                 if (data.event === 'message') {
+                    console.log("Updating messages with new content");
                     setMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
-                    setAutomodeProgress(prev => Math.min(prev + 20, 100)); // Example progress update
+                    setAutomodeProgress(prev => {
+                        const newProgress = Math.min(prev + 20, 100);
+                        console.log("Updating progress:", newProgress);
+                        return newProgress;
+                    });
                 } else if (data.event === 'end') {
+                    console.log("Automode completed");
                     setAutomodeProgress(100);
                     eventSource.close();
                     setIsAutoMode(false);
                 } else if (data.event === 'error') {
+                    console.error("Automode error:", data.content);
                     setMessages(prev => [...prev, { role: 'system', content: data.content }]);
                     eventSource.close();
                     setIsAutoMode(false);
                 }
             };
-
             eventSource.onerror = (error) => {
                 console.error('Error in automode:', error);
                 setMessages(prev => [...prev, { role: 'system', content: 'Error: Automode failed' }]);
                 eventSource.close();
                 setIsAutoMode(false);
             };
-
-            // Cleanup on component unmount
             return () => {
+                console.log("Cleaning up automode");
                 eventSource.close();
             };
         } catch (error) {
@@ -240,6 +248,7 @@ function App() {
       setFiles([]);
     }
   };
+  
 
   const createFolder = async () => {
     const folderName = prompt('Enter folder name:');

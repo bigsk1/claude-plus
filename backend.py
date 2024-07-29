@@ -14,6 +14,7 @@
 # along with Claude Plus.  If not, see <https://www.gnu.org/licenses/>.
 import os
 import logging
+import asyncio
 from typing import Optional, List, Callable
 from contextlib import asynccontextmanager
 from functools import wraps
@@ -31,7 +32,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from automode_logic import AutomodeRequest, start_automode_logic, automode_messages, automode_progress
 from tools import tools, execute_tool 
-from project_state import sync_project_state_with_fs, clear_state_file, refresh_project_state
+from project_state import sync_project_state_with_fs, clear_state_file, refresh_project_state, initialize_project_state
 from config import PROJECTS_DIR, UPLOADS_DIR, CLAUDE_MODEL, anthropic_client
 from shared_utils import (
     system_prompt, perform_search, encode_image_to_base64, create_folder, create_file,
@@ -48,7 +49,8 @@ api_router = APIRouter()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    sync_project_state_with_fs()
+    await initialize_project_state()
+    await sync_project_state_with_fs()
     logger.info("Project state synchronized with file system")
     logger.info("Available endpoints:")
     for route in app.routes:
@@ -109,10 +111,6 @@ class DirectoryContents(BaseModel):
 
 # Conversation history
 conversation_history = []
-
-# Global state for automode
-# automode_progress = 0
-# automode_messages = []
     
 @app.post("/automode")
 async def start_automode(request: Request):
@@ -147,7 +145,7 @@ def safe_path_operation(func: Callable):
         
         kwargs['path'] = os.path.relpath(full_path, PROJECTS_DIR)
         print(f"[DEBUG] safe_path_operation: adjusted_path={kwargs['path']}")
-        return await func(*args, **kwargs)
+        return func(*args, **kwargs)
     return wrapper
 
 
@@ -159,14 +157,14 @@ async def create_project(request: ProjectRequest, path: str):
         os.makedirs(project_path, exist_ok=True)
         
         if request.template == "react":
-            create_file(os.path.join(project_path, "package.json").replace('\\', '/'), '{"name": "react-app", "version": "1.0.0"}')
-            create_file(os.path.join(project_path, "src/App.js").replace('\\', '/'), 'import React from "react";\n\nfunction App() {\n  return <div>Hello, React!</div>;\n}\n\nexport default App;')
+            await create_file(os.path.join(project_path, "package.json").replace('\\', '/'), '{"name": "react-app", "version": "1.0.0"}')
+            await create_file(os.path.join(project_path, "src/App.js").replace('\\', '/'), 'import React from "react";\n\nfunction App() {\n  return <div>Hello, React!</div>;\n}\n\nexport default App;')
         elif request.template == "node":
-            create_file(os.path.join(project_path, "package.json").replace('\\', '/'), '{"name": "node-app", "version": "1.0.0"}')
-            create_file(os.path.join(project_path, "index.js").replace('\\', '/'), 'console.log("Hello, Node.js!");')
+            await create_file(os.path.join(project_path, "package.json").replace('\\', '/'), '{"name": "node-app", "version": "1.0.0"}')
+            await create_file(os.path.join(project_path, "index.js").replace('\\', '/'), 'console.log("Hello, Node.js!");')
         elif request.template == "python":
-            create_file(os.path.join(project_path, "main.py").replace('\\', '/'), 'print("Hello, Python!")')
-            create_file(os.path.join(project_path, "requirements.txt").replace('\\', '/'), '')
+            await create_file(os.path.join(project_path, "main.py").replace('\\', '/'), 'print("Hello, Python!")')
+            await create_file(os.path.join(project_path, "requirements.txt").replace('\\', '/'), '')
         else:
             raise ValueError(f"Unknown project template: {request.template}")
         
@@ -179,7 +177,7 @@ async def create_project(request: ProjectRequest, path: str):
 @app.post("/create_folder")
 async def create_folder_endpoint(path: str = Query(...)):
     try:
-        result = create_folder(path)
+        result = await create_folder(path)
         logger.info(f"Folder created: {path}")
         return {"message": result}
     except Exception as e:
@@ -189,7 +187,7 @@ async def create_folder_endpoint(path: str = Query(...)):
 @app.post("/create_file")
 async def create_file_endpoint(path: str = Query(...), content: str = ""):
     try:
-        result = create_file(path, content)
+        result = await create_file(path, content)
         logger.info(f"File created: {path}")
         return {"message": result}
     except Exception as e:
@@ -199,7 +197,7 @@ async def create_file_endpoint(path: str = Query(...), content: str = ""):
 @app.get("/read_file")
 async def read_file_endpoint(path: str = Query(...)):
     try:
-        content = read_file(path)
+        content = await read_file(path)
         logger.info(f"File read: {path}")
         return {"content": content}
     except Exception as e:
@@ -211,7 +209,7 @@ async def write_file_endpoint(request: Request, path: str = Query(...)):
     try:
         logger.debug(f"Received path: {path}")
         try:
-            body = request.json()
+            body = await request.json()
             logger.debug(f"Received body: {body}")
         except Exception as e:
             logger.error(f"Error parsing JSON body: {str(e)}")
@@ -222,7 +220,7 @@ async def write_file_endpoint(request: Request, path: str = Query(...)):
             raise HTTPException(status_code=422, detail="Content is required")
 
         logger.debug(f"Path: {path}, Content: {content}")
-        result = write_to_file(path, content)
+        result = await write_to_file(path, content)
         if "Error" in result:
             raise HTTPException(status_code=500, detail=result)
         return JSONResponse(content={"message": result})
@@ -233,7 +231,7 @@ async def write_file_endpoint(request: Request, path: str = Query(...)):
 @app.get("/list_files")
 async def list_files_endpoint(path: str = Query(".")):
     try:
-        files = list_files(path)
+        files = await list_files(path)
         return {"files": files, "currentDirectory": path}
     except Exception as e:
         logger.error(f"Error listing files: {str(e)}", exc_info=True)
@@ -242,7 +240,7 @@ async def list_files_endpoint(path: str = Query(".")):
 @app.delete("/delete_file")
 async def delete_file_endpoint(path: str = Query(...)):
     try:
-        result = delete_file(path)
+        result = await delete_file(path)
         logger.info(f"File deleted: {path}")
         return {"message": result}
     except Exception as e:
@@ -270,6 +268,7 @@ async def upload_file(file: UploadFile = File(...)):
         logger.error(f"Error uploading file: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
 
+
 @app.post("/analyze_image")
 async def analyze_image(file: UploadFile = File(...)):
     try:
@@ -277,14 +276,14 @@ async def analyze_image(file: UploadFile = File(...)):
         contents = await file.read()
         logger.debug(f"File contents read, length: {len(contents)} bytes")
 
-        encoded_image = encode_image_to_base64(contents)
+        encoded_image = await encode_image_to_base64(contents)
         
         if encoded_image.startswith("Error encoding image:"):
             raise ValueError(encoded_image)
 
         logger.debug(f"Image encoded, length: {len(encoded_image)}")
 
-        analysis_result = anthropic_client.messages.create(
+        analysis_result = await anthropic_client.messages.create(
             model=CLAUDE_MODEL,
             max_tokens=1000,
             system=system_prompt,
@@ -317,7 +316,7 @@ async def analyze_image(file: UploadFile = File(...)):
 @app.post("/search")
 async def search(query: SearchQuery):
     try:
-        results = perform_search(query.query)
+        results = await perform_search(query.query)
         logger.info(f"Search results: {results}")
         return JSONResponse(content={"results": results})
     except Exception as e:
@@ -331,11 +330,12 @@ async def search(query: SearchQuery):
 @app.post("/clear_state")
 async def clear_project_state():
     try:
-        global project_state
-        project_state = clear_state_file()
-        sync_project_state_with_fs()
-        logger.info("Project state cleared")
-        return {"message": "Project state cleared successfully"}
+        global project_state, conversation_history
+        project_state = await clear_state_file()
+        await sync_project_state_with_fs()
+        conversation_history = []  # Clear the conversation history
+        logger.info("Project state cleared and synced with file system")
+        return {"message": "Project state and chat history cleared successfully"}
     except Exception as e:
         logger.error(f"Error clearing project state: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -369,7 +369,7 @@ async def chat(request: ChatRequest):
                 tool_name = content.name
                 tool_input = content.input
                 logger.info(f"Tool used: {tool_name}, Input: {tool_input}")
-                tool_result = execute_tool(tool_name, tool_input)
+                tool_result = await execute_tool(tool_name, tool_input)
                 if tool_result['success']:
                     response_content += f"\nTool used: {tool_name}\nTool result: {tool_result['result']}\n"
                 else:
@@ -409,26 +409,42 @@ async def download_projects():
         shutil.rmtree(temp_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"Error creating zip file: {str(e)}")
 
-def cleanup(temp_dir: str):
+async def cleanup(temp_dir: str):
     shutil.rmtree(temp_dir, ignore_errors=True)
 
 current_working_directory = PROJECTS_DIR
 
-def get_relative_cwd():
+async def get_relative_cwd():
     global current_working_directory
     return str(Path(current_working_directory).relative_to(PROJECTS_DIR))
 
-def get_shell():
-    return "cmd.exe" if platform.system() == "Windows" else "/bin/bash"
+@api_router.get("/console/cwd")
+async def console_get_current_working_directory():
+    return {"cwd": await get_relative_cwd()}
 
-def execute_shell_command(command, cwd):
-    shell = get_shell()
+async def execute_shell_command(command, cwd):
+    shell = await get_shell()
     full_cwd = str(get_safe_path(cwd))
     if platform.system() == "Windows":
-        result = subprocess.run([shell, "/c", command], capture_output=True, text=True, cwd=full_cwd)
+        result = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=full_cwd,
+            shell=True
+        )
     else:
-        result = subprocess.run([shell, "-c", command], capture_output=True, text=True, cwd=full_cwd)
-    return result.stdout + result.stderr
+        result = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=full_cwd
+        )
+    stdout, stderr = await result.communicate()
+    return (stdout.decode() + stderr.decode()).strip()
+
+async def get_shell():
+    return "cmd.exe" if platform.system() == "Windows" else "/bin/bash"
 
 @api_router.post("/console/execute")
 async def console_execute_command(request: CommandRequest):
@@ -438,78 +454,75 @@ async def console_execute_command(request: CommandRequest):
         cmd = command_parts[0].lower()
 
         if cmd == "cd":
-            return handle_cd(command_parts[1] if len(command_parts) > 1 else ".")
+            return await handle_cd(command_parts[1] if len(command_parts) > 1 else ".")
         elif cmd == "ls" or (cmd == "dir" and platform.system() == "Windows"):
-            return handle_ls(current_working_directory)
+            return await handle_ls(current_working_directory)
         elif cmd == "pwd":
-            return handle_pwd(current_working_directory)
+            return await handle_pwd(current_working_directory)
         elif cmd == "echo":
-            return handle_echo(command_parts[1:], current_working_directory)
+            return await handle_echo(command_parts[1:], current_working_directory)
         elif cmd == "cat" or cmd == "type":
-            return handle_cat(command_parts[1] if len(command_parts) > 1 else "", current_working_directory)
+            return await handle_cat(command_parts[1] if len(command_parts) > 1 else "", current_working_directory)
         elif cmd == "mkdir":
-            return handle_mkdir(command_parts[1] if len(command_parts) > 1 else "", current_working_directory)
+            return await handle_mkdir(command_parts[1] if len(command_parts) > 1 else "", current_working_directory)
         elif cmd == "touch" or cmd == "echo.":
-            return handle_touch(command_parts[1] if len(command_parts) > 1 else "", current_working_directory)
+            return await handle_touch(command_parts[1] if len(command_parts) > 1 else "", current_working_directory)
         else:
-            output = execute_shell_command(request.command, current_working_directory)
-            return {"result": output, "cwd": get_relative_cwd()}
+            output = await execute_shell_command(request.command, current_working_directory)
+            return {"result": output, "cwd": await get_relative_cwd()}
     except Exception as e:
         logger.error(f"Error in console_execute_command: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-def handle_cd(path):
+async def handle_cd(path):
     global current_working_directory
     try:
         new_path = get_safe_path(os.path.join(current_working_directory, path))
         if new_path.is_dir():
             current_working_directory = str(new_path)
-            return {"result": f"Changed directory to: {get_relative_cwd()}", "cwd": get_relative_cwd()}
+            return {"result": f"Changed directory to: {await get_relative_cwd()}", "cwd": await get_relative_cwd()}
         else:
-            return {"result": f"Directory not found or access denied: {path}", "cwd": get_relative_cwd()}
+            return {"result": f"Directory not found or access denied: {path}", "cwd": await get_relative_cwd()}
     except Exception as e:
-        return {"result": f"Error changing directory: {str(e)}", "cwd": get_relative_cwd()}
+        return {"result": f"Error changing directory: {str(e)}", "cwd": await get_relative_cwd()}
 
-def handle_ls(cwd):
+async def handle_ls(cwd):
     full_path = get_safe_path(cwd)
     items = os.listdir(full_path)
-    return {"result": "\n".join(items), "cwd": get_relative_cwd()}
+    return {"result": "\n".join(items), "cwd": await get_relative_cwd()}
 
-def handle_pwd(cwd):
+async def handle_pwd(cwd):
     full_path = get_safe_path(cwd)
-    return {"result": str(full_path), "cwd": get_relative_cwd()}
+    return {"result": str(full_path), "cwd": await get_relative_cwd()}
 
-def handle_echo(args, cwd):
-    return {"result": " ".join(args), "cwd": get_relative_cwd()}
+async def handle_echo(args, cwd):
+    return {"result": " ".join(args), "cwd": await get_relative_cwd()}
 
-def handle_cat(filename, cwd):
+async def handle_cat(filename, cwd):
     try:
         full_path = get_safe_path(os.path.join(cwd, filename))
         with full_path.open('r') as file:
             content = file.read()
-        return {"result": content, "cwd": get_relative_cwd()}
+        return {"result": content, "cwd": await get_relative_cwd()}
     except Exception as e:
-        return {"result": f"Error reading file: {str(e)}", "cwd": get_relative_cwd()}
+        return {"result": f"Error reading file: {str(e)}", "cwd": await get_relative_cwd()}
 
-def handle_mkdir(dirname, cwd):
+async def handle_mkdir(dirname, cwd):
     try:
         full_path = get_safe_path(os.path.join(cwd, dirname))
         full_path.mkdir(parents=True, exist_ok=True)
-        return {"result": f"Directory created: {dirname}", "cwd": get_relative_cwd()}
+        return {"result": f"Directory created: {dirname}", "cwd": await get_relative_cwd()}
     except Exception as e:
-        return {"result": f"Error creating directory: {str(e)}", "cwd": get_relative_cwd()}
+        return {"result": f"Error creating directory: {str(e)}", "cwd": await get_relative_cwd()}
 
-def handle_touch(filename, cwd):
+async def handle_touch(filename, cwd):
     try:
         full_path = get_safe_path(os.path.join(cwd, filename))
         full_path.touch()
-        return {"result": f"File touched: {filename}", "cwd": get_relative_cwd()}
+        return {"result": f"File touched: {filename}", "cwd": await get_relative_cwd()}
     except Exception as e:
-        return {"result": f"Error touching file: {str(e)}", "cwd": get_relative_cwd()}
+        return {"result": f"Error touching file: {str(e)}", "cwd": await get_relative_cwd()}
 
-@api_router.get("/console/cwd")
-async def console_get_current_working_directory():
-    return {"cwd": get_relative_cwd()}
 
 @api_router.post("/run_python")
 async def run_python(request: CommandRequest):
@@ -554,9 +567,9 @@ async def pip_install(request: CommandRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/refresh_state")
-def refresh_project_state_endpoint():
+async def refresh_project_state_endpoint():
     try:
-        refresh_project_state()
+        await refresh_project_state()
         logger.info("Project state refreshed successfully")
         return {"message": "Project state refreshed successfully"}
     except Exception as e:

@@ -13,9 +13,10 @@
 # You should have received a copy of the GNU General Public License
 # along with Claude Plus.  If not, see <https://www.gnu.org/licenses/>.
 import os
+import asyncio
 import json
 import logging
-from typing import Generator
+from typing import AsyncGenerator
 from pydantic import BaseModel
 from fastapi import HTTPException
 from config import CLAUDE_MODEL, anthropic_client
@@ -36,14 +37,14 @@ automode_messages = []
 class AutomodeRequest(BaseModel):
     message: str
 
-def start_automode_logic(request: AutomodeRequest) -> Generator[str, None, None]:
+async def start_automode_logic(request: AutomodeRequest) -> AsyncGenerator[str, None]:
     global automode_progress, automode_messages, project_state
     try:
         automode_progress = 0
         automode_messages = []
         
         # Synchronize project state at the start
-        sync_project_state_with_fs()
+        await sync_project_state_with_fs()
         logger.debug(f"Initial project state: {project_state}")
         
         system_message = f"""
@@ -112,11 +113,11 @@ def start_automode_logic(request: AutomodeRequest) -> Generator[str, None, None]
                     tool_name = content.name
                     tool_input = content.input
                     logger.debug(f"Using tool: {tool_name} with input: {tool_input}")
-                    tool_result = execute_tool(tool_name, tool_input)
+                    tool_result = await execute_tool(tool_name, tool_input)
                     assistant_response += f"Used tool: {tool_name}\nResult: {tool_result}\n\n"
                     # Log and save project state after each tool use
                     logger.debug(f"Project state after {tool_name}: {project_state}")
-                    save_state_to_file(project_state)
+                    await save_state_to_file(project_state)
 
             automode_messages.append({"role": "assistant", "content": assistant_response})
             automode_progress = (i + 1) / MAX_ITERATIONS * 100
@@ -124,6 +125,7 @@ def start_automode_logic(request: AutomodeRequest) -> Generator[str, None, None]
             logger.debug(f"Progress: {automode_progress}, Messages: {automode_messages}")
 
             yield f"data: {json.dumps({'event': 'message', 'content': assistant_response})}\n\n"
+            await asyncio.sleep(0.1)  # Add a small delay to ensure the event is sent
 
             if "AUTOMODE_COMPLETE" in assistant_response:
                 break
@@ -131,7 +133,7 @@ def start_automode_logic(request: AutomodeRequest) -> Generator[str, None, None]
             conversation_history.append({"role": "assistant", "content": assistant_response})
             conversation_history.append({"role": "user", "content": "Continue with the next step if necessary or reply with AUTOMODE_COMPLETE if finished."})
 
-            sync_project_state_with_fs()
+            await sync_project_state_with_fs()
             logger.debug(f"Project state after syncing: {project_state}")
 
 

@@ -14,6 +14,7 @@
 # along with Claude Plus.  If not, see <https://www.gnu.org/licenses/>.
 import os
 import json
+import asyncio
 # import re
 import logging
 import platform
@@ -128,7 +129,7 @@ def get_safe_path(path: str) -> Path:
     return full_path
 
 
-def sync_filesystem():
+async def sync_filesystem():
     try:
         if hasattr(os, 'sync'):
             os.sync()
@@ -140,7 +141,7 @@ def sync_filesystem():
         logger.error(f"Error syncing file system: {str(e)}", exc_info=True)
 
 
-def encode_image_to_base64(image_data):
+async def encode_image_to_base64(image_data):
     try:
         logger.debug(f"Encoding image, data type: {type(image_data)}")
         
@@ -167,18 +168,18 @@ def encode_image_to_base64(image_data):
         logger.error(f"Error encoding image: {str(e)}", exc_info=True)
         return f"Error encoding image: {str(e)}"
 
-def perform_search(query: str) -> str:
+async def perform_search(query: str) -> str:
     """
     Perform a search using the configured search provider.
     """
     if SEARCH_PROVIDER == "SEARXNG":
-        return searxng_search(query)
+        return await searxng_search(query)
     elif SEARCH_PROVIDER == "TAVILY":
-        return tavily_search(query)
+        return await tavily_search(query)
     else:
         return f"Error: Unknown search provider '{SEARCH_PROVIDER}'"
 
-def searxng_search(query: str) -> str:
+async def searxng_search(query: str) -> str:
     """
     Perform a search using the local SearXNG instance.
     """
@@ -190,7 +191,12 @@ def searxng_search(query: str) -> str:
         "User-Agent": "ClaudePlus/1.0"
     }
     try:
-        response = requests.get(SEARXNG_URL, params=params, headers=headers, timeout=20)
+        # Use asyncio to run the requests.get in a separate thread
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None, 
+            lambda: requests.get(SEARXNG_URL, params=params, headers=headers, timeout=20)
+        )
         response.raise_for_status()
         results = response.json()
         
@@ -203,14 +209,17 @@ def searxng_search(query: str) -> str:
     except requests.RequestException as e:
         return f"Error performing SearXNG search: {str(e)}"
 
-def tavily_search(query: str) -> str:
+async def tavily_search(query: str) -> str:
     """
     Perform a search using Tavily.
     """
     try:
-        response = tavily_client.get_search_context(query, search_depth="advanced", max_results=5)
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: tavily_client.get_search_context(query, search_depth="advanced", max_results=5)
+        )
         logger.debug(f"Tavily raw response: {response}")
-        
         if isinstance(response, str):
             try:
                 results = json.loads(response)
@@ -259,12 +268,12 @@ def tavily_search(query: str) -> str:
         logger.error(f"Error performing Tavily search: {str(e)}", exc_info=True)
         return f"Error performing Tavily search: {str(e)}"
 
-def create_folder(path: str) -> str:
+async def create_folder(path: str) -> str:
     try:
         logger.debug(f"Creating folder at path: {path}")
         full_path = get_safe_path(path)
         full_path.mkdir(parents=True, exist_ok=True)
-        sync_filesystem()
+        await sync_filesystem()
         if not full_path.exists():
             raise FileNotFoundError(f"Failed to create folder: {full_path}")
         logger.info(f"Folder created and verified: {full_path}")
@@ -273,13 +282,13 @@ def create_folder(path: str) -> str:
         logger.error(f"Error creating folder: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error creating folder: {str(e)}")
 
-def create_file(path: str, content: str = "") -> str:
+async def create_file(path: str, content: str = "") -> str:
     try:
         logger.debug(f"Creating file at path: {path} with content length: {len(content)}")
         full_path = get_safe_path(path)
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text(content, encoding='utf-8')
-        sync_filesystem()
+        await sync_filesystem()
         if not full_path.exists():
             raise FileNotFoundError(f"Failed to create file: {full_path}")
         logger.info(f"File created and verified: {full_path}")
@@ -288,22 +297,36 @@ def create_file(path: str, content: str = "") -> str:
         logger.error(f"Error creating file: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error creating file: {str(e)}")
 
-def write_to_file(path: str, content: str) -> str:
+async def write_to_file(path: str, content: str) -> str:
     try:
         logger.debug(f"Writing to file at path: {path} with content length: {len(content)}")
         full_path = get_safe_path(path)
+        logger.debug(f"Full path resolved to: {full_path}")
+        
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        
         with open(full_path, 'w', encoding='utf-8') as f:
             f.write(content)
-        sync_filesystem()
+        await sync_filesystem()
+        
         if not os.path.exists(full_path):
             raise FileNotFoundError(f"Failed to write to file: {full_path}")
-        logger.info(f"Content written to file and verified: {full_path}")
-        return f"Content written to file: {full_path}"
+        
+        # Verify the content was written correctly
+        with open(full_path, 'r', encoding='utf-8') as f:
+            written_content = f.read()
+        if written_content != content:
+            raise ValueError(f"File content verification failed for {full_path}")
+        
+        file_size = os.path.getsize(full_path)
+        logger.info(f"Content written to file and verified: {full_path} (Size: {file_size} bytes)")
+        return f"Content written to file: {full_path} (Size: {file_size} bytes)"
     except Exception as e:
         logger.error(f"Error writing to file: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error writing to file: {str(e)}")
 
-def read_file(path: str) -> str:
+async def read_file(path: str) -> str:
     try:
         full_path = get_safe_path(path)
         if not full_path.is_file():
@@ -316,7 +339,7 @@ def read_file(path: str) -> str:
         return f"Error reading file: {str(e)}"
 
 
-def list_files(path: str = ".") -> list:
+async def list_files(path: str = ".") -> list:
     try:
         full_path = get_safe_path(path)
         files = []
@@ -337,14 +360,14 @@ def list_files(path: str = ".") -> list:
                 project_state["files"].add(rel_path)
         
         logger.info(f"Listed files in {full_path}")
-        save_state_to_file(project_state)
+        await save_state_to_file(project_state)
         logger.debug(f"Updated project state: {project_state}")
         return files
     except Exception as e:
         logger.error(f"Error listing files: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error listing files: {str(e)}")
     
-def delete_file(path: str) -> str:
+async def delete_file(path: str) -> str:
     try:
         full_path = get_safe_path(path)
         if full_path.is_file():
@@ -354,7 +377,7 @@ def delete_file(path: str) -> str:
         else:
             raise FileNotFoundError(f"File or directory not found: {full_path}")
         logger.info(f"Deleted: {full_path}")
-        sync_filesystem()
+        await sync_filesystem()
         return f"Deleted: {full_path}"
     except Exception as e:
         logger.error(f"Error deleting file: {str(e)}", exc_info=True)

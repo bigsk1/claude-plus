@@ -3,7 +3,6 @@ import logging
 import json
 from config import PROJECTS_DIR
 
-
 logger = logging.getLogger(__name__)
 
 PROJECT_STATE_FILE = "project_state.json"
@@ -14,7 +13,7 @@ project_state = {
     "files": set()
 }
 
-def clear_state_file():
+async def clear_state_file():
     global project_state
     project_state = {"folders": set(), "files": set()}
     try:
@@ -25,27 +24,29 @@ def clear_state_file():
         logger.error(f"Error clearing project state file: {str(e)}")
     return project_state
 
-def sync_project_state_with_fs():
+async def sync_project_state_with_fs():
     global project_state
-    project_state = {"folders": set(), "files": set()}
+    new_state = {"folders": set(), "files": set()}
     
     for root, dirs, files in os.walk(PROJECTS_DIR):
         for dir in dirs:
             rel_path = os.path.relpath(os.path.join(root, dir), PROJECTS_DIR).replace(os.sep, '/')
-            project_state["folders"].add(rel_path)
+            new_state["folders"].add(rel_path)
         for file in files:
             rel_path = os.path.relpath(os.path.join(root, file), PROJECTS_DIR).replace(os.sep, '/')
-            project_state["files"].add(rel_path)
+            new_state["files"].add(rel_path)
     
-    save_state_to_file(project_state)
+    project_state = new_state
+    await save_state_to_file(project_state)
     logger.debug(f"Synced project state with file system: {project_state}")
+    return project_state
 
-def save_state_to_file(state, filename=PROJECT_STATE_FILE):
+async def save_state_to_file(state, filename=PROJECT_STATE_FILE):
     with open(filename, 'w') as f:
         json.dump({"folders": list(state["folders"]), "files": list(state["files"])}, f)
     logger.debug(f"Saved project state to file: {state}")
 
-def load_state_from_file(filename=PROJECT_STATE_FILE):
+async def load_state_from_file(filename=PROJECT_STATE_FILE):
     try:
         with open(filename, 'r') as f:
             data = json.load(f)
@@ -53,10 +54,12 @@ def load_state_from_file(filename=PROJECT_STATE_FILE):
     except FileNotFoundError:
         return {"folders": set(), "files": set()}
 
-# Load the state at the beginning
-project_state = load_state_from_file()
+async def initialize_project_state():
+    global project_state
+    project_state = await load_state_from_file()
+    logger.info("Project state initialized")
 
-def refresh_project_state():
+async def refresh_project_state():
     global project_state
     project_state = {"folders": set(), "files": set()}
 
@@ -66,4 +69,4 @@ def refresh_project_state():
         for file_name in files:
             project_state["files"].add(os.path.relpath(os.path.join(root, file_name), PROJECTS_DIR).replace('\\', '/'))
 
-    save_state_to_file(project_state)
+    await save_state_to_file(project_state)

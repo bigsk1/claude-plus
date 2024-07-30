@@ -30,8 +30,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install uvicorn
 
 # Copy backend source
-COPY backend.py shared_utils.py ./
-
+COPY *.py ./
 
 # Copy frontend files
 COPY frontend /app/frontend

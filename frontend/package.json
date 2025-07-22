@@ -18,7 +18,7 @@
     "@emotion/styled": "^11.11.5",
     "@types/diff": "^5.2.1",
     "@types/react-syntax-highlighter": "^15.5.13",
-    "axios": "^1.7.4",
+    "axios": "^1.8.2",
     "diff": "^5.2.0",
     "framer-motion": "^11.2.13",
     "react": "^18.3.1",
